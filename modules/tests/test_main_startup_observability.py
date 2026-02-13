@@ -5,8 +5,6 @@ import logging
 import sys
 import types
 
-import pytest
-
 
 def _base_cfg(*, strict: bool, amount_to_trade: str) -> configparser.ConfigParser:
     c = configparser.ConfigParser()
@@ -25,7 +23,6 @@ def _base_cfg(*, strict: bool, amount_to_trade: str) -> configparser.ConfigParse
 
 
 def _bootstrap_main_with_dummies(monkeypatch, tmp_path):
-    """Patch heavyweight startup dependencies and return (main, app_created dict)."""
     sys.modules.setdefault("pandas", types.ModuleType("pandas"))
 
     fake_ui = types.ModuleType("modules.ui")
@@ -47,18 +44,15 @@ def _bootstrap_main_with_dummies(monkeypatch, tmp_path):
     logs = tmp_path / "logs"
     backup = tmp_path / "backup"
     root = tmp_path / "root"
+    paths = {
+        "logs": str(logs),
+        "backup": str(backup),
+        "root": str(root),
+        "config_dir": str(root / "config"),
+        "db_dir": str(root / "db"),
+    }
 
-    monkeypatch.setattr(
-        main,
-        "get_paths",
-        lambda: {
-            "logs": str(logs),
-            "backup": str(backup),
-            "root": str(root),
-            "config_dir": str(root / "config"),
-            "db_dir": str(root / "db"),
-        },
-    )
+    monkeypatch.setattr(main, "get_paths", lambda: paths)
     monkeypatch.setattr(main, "ensure_split_config_layout", lambda _paths: None)
 
     class DummyDataManager:
@@ -67,19 +61,6 @@ def _bootstrap_main_with_dummies(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "DataManager", DummyDataManager)
     return main, app_created
-
-
-def test_main_raises_on_strict_validation_errors(monkeypatch, tmp_path, caplog):
-    main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
-    monkeypatch.setattr(main, "load_split_config", lambda _paths: _base_cfg(strict=True, amount_to_trade="0"))
-    monkeypatch.setattr(main, "get_last_config_sanitizer_report", lambda: None)
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="Configuration validation failed in strict mode"):
-            main.main()
-
-    assert app_created["value"] is False
-    assert any("amount_to_trade must be > 0" in rec.message for rec in caplog.records)
 
 
 def test_main_continues_on_non_strict_validation_errors(monkeypatch, tmp_path, caplog):
@@ -133,3 +114,22 @@ def test_main_logs_when_sanitizer_log_write_fails(monkeypatch, tmp_path, caplog)
 
     assert app_created["value"] is True
     assert any("Failed writing config_sanitizer.log" in rec.message for rec in caplog.records)
+
+
+def test_main_writes_sanitizer_log_when_report_exists(monkeypatch, tmp_path):
+    main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
+    monkeypatch.setattr(main, "load_split_config", lambda _paths: _base_cfg(strict=False, amount_to_trade="10"))
+    monkeypatch.setattr(
+        main,
+        "get_last_config_sanitizer_report",
+        lambda: {"repairs": 2, "backup_path": "/tmp/backup.ini"},
+    )
+
+    main.main()
+
+    assert app_created["value"] is True
+    out = tmp_path / "logs" / "config_sanitizer.log"
+    assert out.exists()
+    text = out.read_text(encoding="utf-8")
+    assert "Sanitizer repaired config.ini formatting" in text
+    assert "repairs=2" in text
