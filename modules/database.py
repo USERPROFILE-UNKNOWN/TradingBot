@@ -33,7 +33,7 @@ class DataManager:
         self.paths = paths or {}
 
         # v5.12.3 updateA: optional log callback (TradingApp.log) for DB diagnostics.
-        # Safe default: None (falls back to print in a few places).
+        # Safe default: None (falls back to standard module logger).
         self._log_cb = None
         self._logger = get_logger(__name__)
 
@@ -66,23 +66,35 @@ class DataManager:
             pass
 
     def set_log_callback(self, cb):
-        """Set a callable that accepts a single string for runtime logging."""
+        """Set a runtime log callback.
+
+        Callback compatibility:
+        - Preferred: cb(msg, **context)
+        - Legacy:    cb(msg)
+        """
         try:
             self._log_cb = cb
         except Exception:
             self._log_cb = None
         self._logger = get_logger(__name__)
 
-    def _log(self, msg: str) -> None:
+    def _log(self, msg: str, **context) -> None:
         """Best-effort log sink for DB-layer diagnostics."""
+        ctx = {"component": "db", **(context or {})}
+
         try:
             if callable(self._log_cb):
-                self._log_cb(str(msg))
+                try:
+                    self._log_cb(str(msg), **ctx)
+                except TypeError:
+                    # Backward-compatible with legacy single-arg callbacks.
+                    self._log_cb(str(msg))
                 return
         except Exception:
             pass
+
         try:
-            self._logger.info(msg)
+            self._logger.info(msg, extra=ctx)
         except Exception:
             pass
 
