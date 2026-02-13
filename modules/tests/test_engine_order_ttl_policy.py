@@ -87,7 +87,8 @@ def _make_engine(core_module):
     engine.retry_api_call = lambda fn, *a, **k: fn(*a, **k)
     engine._redact = lambda e: str(e)
     engine._log_exec_packet = lambda **_kwargs: None
-    engine._emit = lambda *args, **kwargs: None
+    engine._emit_calls = []
+    engine._emit = lambda *args, **kwargs: engine._emit_calls.append({"args": args, "kwargs": kwargs})
     engine._e5_note_ttl_cancel = lambda _symbol=None: engine._e5_ttl_cancel_events.append(_symbol)
     return engine
 
@@ -105,6 +106,10 @@ def test_process_pending_orders_cancels_unfilled_entry_after_ttl(monkeypatch):
     assert engine._order_stats["ttl_canceled"] == 1
     assert engine._order_stats["canceled"] == 1
     assert engine._e5_ttl_cancel_events == ["AAPL"]
+    ttl_logs = [c["kwargs"] for c in engine._emit_calls if "CANCELED unfilled BUY" in str(c["args"][0])]
+    assert len(ttl_logs) == 1
+    assert ttl_logs[0]["order_id"] == "oid-1"
+    assert ttl_logs[0]["strategy"] == "TEST"
 
 
 def test_process_pending_orders_does_not_cancel_when_ttl_disabled(monkeypatch):

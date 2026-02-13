@@ -692,7 +692,17 @@ class TradingEngine:
 
         return s
 
-    def _emit(self, msg, level="INFO", category=None, symbol=None, throttle_key=None, throttle_sec=0):
+    def _emit(
+        self,
+        msg,
+        level="INFO",
+        category=None,
+        symbol=None,
+        order_id=None,
+        strategy=None,
+        throttle_key=None,
+        throttle_sec=0,
+    ):
         """Emit a log record to UI. Works with both legacy and structured log callbacks."""
         # Honor configured minimum log level
         try:
@@ -727,7 +737,14 @@ class TradingEngine:
 
         # If the UI supports structured logging, use it; otherwise prefix the string.
         try:
-            self.log(msg, level=level, category=category, symbol=symbol)
+            self.log(
+                msg,
+                level=level,
+                category=category,
+                symbol=symbol,
+                order_id=order_id,
+                strategy=strategy,
+            )
             return
         except TypeError:
             pass
@@ -746,6 +763,10 @@ class TradingEngine:
                 parts.append(str(category).upper())
             if symbol:
                 parts.append(str(symbol).upper())
+            if order_id:
+                parts.append(f"OID:{order_id}")
+            if strategy:
+                parts.append(f"STRAT:{strategy}")
 
             prefix = " ".join([f"[{p}]" for p in parts])
             final = f"{prefix} {msg}".strip() if prefix else str(msg)
@@ -1368,7 +1389,7 @@ class TradingEngine:
                 if c >= confirm_n:
                     del self.pending_orders[str(oid)]
                     self._pending_symbols.discard(sym)
-                    self._emit(f"[E_RECON_PENDING_MISSING] Dropped missing pending order {oid} for {sym}", level="WARN", category="ORDER", symbol=sym, throttle_key=f"recon_pend_{sym}", throttle_sec=60)
+                    self._emit(f"[E_RECON_PENDING_MISSING] Dropped missing pending order {oid} for {sym}", level="WARN", category="ORDER", symbol=sym, order_id=oid, throttle_key=f"recon_pend_{sym}", throttle_sec=60)
             except Exception:
                 continue
 
@@ -1484,7 +1505,7 @@ class TradingEngine:
                             self._order_stats['filled'] = int(self._order_stats.get('filled', 0)) + 1
                         except Exception:
                             pass
-                        self._emit(f"✅ FILLED {sym} | Qty {qty} @ ${filled_price:.2f} | {strat}", level="INFO", category="ORDER", symbol=sym)
+                        self._emit(f"✅ FILLED {sym} | Qty {qty} @ ${filled_price:.2f} | {strat}", level="INFO", category="ORDER", symbol=sym, order_id=oid, strategy=strat)
                         del self.pending_orders[oid]
                         self._pending_symbols.discard(sym)
                         continue
@@ -1514,7 +1535,7 @@ class TradingEngine:
                         self._order_stats['filled'] = int(self._order_stats.get('filled', 0)) + 1
                     except Exception:
                         pass
-                    self._emit(f"✅ FILLED {sym} | Qty {fq} @ ${fp:.2f} | {strat}", level="INFO", category="ORDER", symbol=sym)
+                    self._emit(f"✅ FILLED {sym} | Qty {fq} @ ${fp:.2f} | {strat}", level="INFO", category="ORDER", symbol=sym, order_id=oid, strategy=strat)
                     del self.pending_orders[oid]
                     self._pending_symbols.discard(sym)
                     continue
@@ -1535,7 +1556,7 @@ class TradingEngine:
                         except Exception:
                             pass
                     if self._log_order_lifecycle:
-                        self._emit(f"❌ BUY {sym} {status.upper()} | {strat}", level="WARN", category="ORDER", symbol=sym)
+                        self._emit(f"❌ BUY {sym} {status.upper()} | {strat}", level="WARN", category="ORDER", symbol=sym, order_id=oid, strategy=strat)
                     del self.pending_orders[oid]
                     self._pending_symbols.discard(sym)
                     continue
@@ -1562,7 +1583,7 @@ class TradingEngine:
                     except Exception:
                         pass
                     if self._log_order_lifecycle:
-                        self._emit(f"⏱️ CANCELED unfilled BUY {sym} after {int(age)}s | {strat}", level="WARN", category="ORDER", symbol=sym, throttle_key=f"ttl_{sym}", throttle_sec=30)
+                        self._emit(f"⏱️ CANCELED unfilled BUY {sym} after {int(age)}s | {strat}", level="WARN", category="ORDER", symbol=sym, order_id=oid, strategy=strat, throttle_key=f"ttl_{sym}", throttle_sec=30)
                     del self.pending_orders[oid]
                     self._pending_symbols.discard(sym)
             except Exception as e:
