@@ -68,9 +68,9 @@ def main():
                 ) as lf:
                     lf.write(msg + "\n")
             except Exception:
-                pass
+                log.exception("[CONFIG] Failed writing config_sanitizer.log")
     except Exception:
-        pass
+        log.exception("[CONFIG] Failed to read sanitizer report")
 
     # 4) Resolve + init Database
     db_path = _resolve_db_placeholder_path(paths, config)
