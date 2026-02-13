@@ -2451,7 +2451,14 @@ class TradingEngine:
                 self.liquidate_all()
                 self.stop(reason="KILL_SWITCH")
                 
-        except Exception as e: self.log(f"Kill Switch Check Fail: {e}")
+        except Exception as e:
+            self._emit(
+                f"Kill Switch Check Fail: {e}",
+                level="ERROR",
+                category="RISK",
+                throttle_key="kill_switch_check_fail",
+                throttle_sec=120,
+            )
 
     def liquidate_all(self):
         # Release D1: cancel open entry orders before liquidating positions
@@ -2885,7 +2892,15 @@ class TradingEngine:
             
             return None
             
-        except Exception as e: return None
+        except Exception as e:
+            self._emit(
+                f"Decision evaluation failed for {symbol}: {type(e).__name__}: {e}",
+                level="DEBUG",
+                category="DECISION",
+                throttle_key=f"decision_eval_fail_{symbol}",
+                throttle_sec=120,
+            )
+            return None
 
     def scan_market_parallel(self):
         if 'WATCHLIST' not in self.config: return

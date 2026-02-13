@@ -29,10 +29,6 @@ def _is_strict_validation_enabled(config) -> bool:
 def main():
     # 1) Setup Paths
     paths = get_paths()
-    os.makedirs(paths['logs'], exist_ok=True)
-    os.makedirs(paths['backup'], exist_ok=True)
-    configure_logging(paths.get("logs"))
-    log = get_logger(__name__)
     configure_logging(paths.get("logs"))
     log = get_logger(__name__)
     os.makedirs(paths["logs"], exist_ok=True)

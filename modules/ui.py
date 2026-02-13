@@ -1439,7 +1439,7 @@ class TradingApp(ctk.CTk):
             # Repopulate
             self.populate_backtest_ui(sorted_df)
         except Exception as e:
-            print(f"Sort Error: {e}")
+            self.log(f"❌ Sort Error: {e}")
 
     def toggle_engine(self):
         if not self.engine.active: 
