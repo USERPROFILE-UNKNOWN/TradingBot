@@ -133,3 +133,15 @@ def test_main_logs_when_sanitizer_log_write_fails(monkeypatch, tmp_path, caplog)
 
     assert app_created["value"] is True
     assert any("Failed writing config_sanitizer.log" in rec.message for rec in caplog.records)
+
+def test_main_boots_without_broker_credentials(monkeypatch, tmp_path, caplog):
+    main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
+    monkeypatch.setattr(main, "load_split_config", lambda _paths: _base_cfg(strict=False, amount_to_trade="100"))
+    monkeypatch.setattr(main, "get_last_config_sanitizer_report", lambda: None)
+
+    with caplog.at_level(logging.WARNING):
+        main.main()
+
+    assert app_created["value"] is True
+    assert any("KEYS.alpaca_key is empty" in rec.message for rec in caplog.records)
+    assert any("KEYS.alpaca_secret is empty" in rec.message for rec in caplog.records)
