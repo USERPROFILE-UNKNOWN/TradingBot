@@ -42,5 +42,9 @@ def import_engine_core_with_stubs(monkeypatch):
     fake_ai.AI_Oracle = _DummyOracle
     monkeypatch.setitem(sys.modules, "modules.ai", fake_ai)
 
+    # Ensure a clean import so tests do not depend on prior module state.
+    sys.modules.pop("modules.engine.core", None)
+    sys.modules.pop("modules.engine", None)
+
     core = importlib.import_module("modules.engine.core")
     return importlib.reload(core)
