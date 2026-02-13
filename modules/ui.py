@@ -1604,22 +1604,41 @@ class TradingApp(ctk.CTk):
         except Exception:
             pass
 
-    def log(self, msg):
+    def log(self, msg, level="INFO", category=None, symbol=None, order_id=None, strategy=None):
+        parts = []
+        try:
+            lvl = str(level or "INFO").upper()
+            if lvl and lvl != "INFO":
+                parts.append(lvl)
+        except Exception:
+            pass
+        if category:
+            parts.append(str(category).upper())
+        if symbol:
+            parts.append(str(symbol).upper())
+        if order_id:
+            parts.append(f"OID:{order_id}")
+        if strategy:
+            parts.append(f"STRAT:{strategy}")
+
+        prefix = " ".join([f"[{p}]" for p in parts])
+        final_msg = f"{prefix} {msg}".strip() if prefix else str(msg)
+
         # Release E2: always queue file-backed log first (thread-safe)
         try:
-            self._queue_file_log(msg)
+            self._queue_file_log(final_msg)
         except Exception:
             pass
 
         # Thread-safe: do NOT call .after() from worker threads.
         if threading.get_ident() == self._main_thread_id:
             try:
-                self._insert_log(msg)
+                self._insert_log(final_msg)
             except Exception:
                 pass
         else:
             try:
-                self._log_queue.put(msg)
+                self._log_queue.put(final_msg)
             except Exception:
                 pass
 
