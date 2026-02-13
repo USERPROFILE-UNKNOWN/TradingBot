@@ -145,3 +145,16 @@ def test_main_boots_without_broker_credentials(monkeypatch, tmp_path, caplog):
     assert app_created["value"] is True
     assert any("KEYS.alpaca_key is empty" in rec.message for rec in caplog.records)
     assert any("KEYS.alpaca_secret is empty" in rec.message for rec in caplog.records)
+
+
+def test_main_raises_on_strict_missing_credentials(monkeypatch, tmp_path, caplog):
+    main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
+    monkeypatch.setattr(main, "load_split_config", lambda _paths: _base_cfg(strict=True, amount_to_trade="100"))
+    monkeypatch.setattr(main, "get_last_config_sanitizer_report", lambda: None)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="Configuration validation failed in strict mode"):
+            main.main()
+
+    assert app_created["value"] is False
+    assert any("KEYS.alpaca_key is empty" in rec.message for rec in caplog.records)

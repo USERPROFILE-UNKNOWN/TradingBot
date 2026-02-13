@@ -29,7 +29,7 @@ def _to_int(config, section: str, key: str, fallback: int) -> int:
         return fallback
 
 
-def validate_runtime_config(config) -> ConfigValidationReport:
+def validate_runtime_config(config, *, require_credentials: bool = False) -> ConfigValidationReport:
     """Validate key runtime values for safer startup behavior."""
     rep = ConfigValidationReport()
 
@@ -41,14 +41,18 @@ def validate_runtime_config(config) -> ConfigValidationReport:
     if rep.errors:
         return rep
 
-    # Required credentials fields (can be blank in paper/testing, so warning-only).
+    # Required credentials fields (warning-only unless strict startup asks for enforcement).
     for key in ("alpaca_key", "alpaca_secret"):
         try:
             val = (config.get("KEYS", key, fallback="") or "").strip()
         except Exception:
             val = ""
         if not val:
-            rep.warnings.append(f"KEYS.{key} is empty; live trading API calls may fail")
+            msg = f"KEYS.{key} is empty; live trading API calls may fail"
+            if require_credentials:
+                rep.errors.append(msg)
+            else:
+                rep.warnings.append(msg)
 
     amount_to_trade = _to_float(config, "CONFIGURATION", "amount_to_trade", 2000.0)
     if amount_to_trade <= 0:

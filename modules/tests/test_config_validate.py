@@ -47,3 +47,18 @@ def test_validate_runtime_config_warns_on_very_low_update_interval():
     cfg["CONFIGURATION"]["update_interval_sec"] = "2"
     rep = validate_runtime_config(cfg)
     assert any("update_interval_sec" in w for w in rep.warnings)
+
+
+def test_validate_runtime_config_requires_credentials_when_enforced():
+    cfg = _base_cfg()
+    rep = validate_runtime_config(cfg, require_credentials=True)
+    assert rep.ok is False
+    assert any("KEYS.alpaca_key is empty" in e for e in rep.errors)
+    assert any("KEYS.alpaca_secret is empty" in e for e in rep.errors)
+
+
+def test_validate_runtime_config_allows_empty_credentials_by_default():
+    cfg = _base_cfg()
+    rep = validate_runtime_config(cfg)
+    assert rep.ok is True
+    assert any("KEYS.alpaca_key is empty" in w for w in rep.warnings)

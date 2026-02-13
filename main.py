@@ -41,14 +41,15 @@ def main():
     config = load_split_config(paths)
 
     # 3.1) Validate runtime config (strict mode optional)
-    repv = validate_runtime_config(config)
+    strict_mode = _is_strict_validation_enabled(config)
+    repv = validate_runtime_config(config, require_credentials=strict_mode)
     for warning in repv.warnings:
         log.warning("[CONFIG] %s", warning)
 
     if repv.errors:
         for err in repv.errors:
             log.error("[CONFIG] %s", err)
-        if _is_strict_validation_enabled(config):
+        if strict_mode:
             raise RuntimeError("Configuration validation failed in strict mode")
 
     # Config sanitizer warning (only if repairs were needed)
