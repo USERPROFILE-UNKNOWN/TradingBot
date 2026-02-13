@@ -1,49 +1,4 @@
-import importlib
-import sys
-import types
-
-
-def _import_engine_core_with_stubs(monkeypatch):
-    # Stub heavyweight/optional dependencies used at module import time.
-    monkeypatch.setitem(sys.modules, "alpaca_trade_api", types.ModuleType("alpaca_trade_api"))
-    monkeypatch.setitem(sys.modules, "pandas_ta", types.ModuleType("pandas_ta"))
-    monkeypatch.setitem(sys.modules, "pandas", types.ModuleType("pandas"))
-    monkeypatch.setitem(sys.modules, "requests", types.ModuleType("requests"))
-
-    fake_strategies = types.ModuleType("modules.strategies")
-
-    class _DummyOptimizer:
-        def __init__(self, *_args, **_kwargs):
-            return None
-
-    class _DummyWallet:
-        def __init__(self, *_args, **_kwargs):
-            return None
-
-    fake_strategies.StrategyOptimizer = _DummyOptimizer
-    fake_strategies.WalletManager = _DummyWallet
-    monkeypatch.setitem(sys.modules, "modules.strategies", fake_strategies)
-
-    fake_sentiment = types.ModuleType("modules.sentiment")
-
-    class _DummySentinel:
-        def __init__(self, *_args, **_kwargs):
-            return None
-
-    fake_sentiment.NewsSentinel = _DummySentinel
-    monkeypatch.setitem(sys.modules, "modules.sentiment", fake_sentiment)
-
-    fake_ai = types.ModuleType("modules.ai")
-
-    class _DummyOracle:
-        def __init__(self, *_args, **_kwargs):
-            return None
-
-    fake_ai.AI_Oracle = _DummyOracle
-    monkeypatch.setitem(sys.modules, "modules.ai", fake_ai)
-
-    core = importlib.import_module("modules.engine.core")
-    return importlib.reload(core)
+from modules.tests.engine_test_stubs import import_engine_core_with_stubs
 
 
 class _DummyDB:
@@ -82,7 +37,14 @@ def _make_engine(core_module):
     engine._live_entry_ttl_sec = 60
     engine._live_cancel_unfilled_entries = True
     engine._log_order_lifecycle = True
-    engine._order_stats = {"submitted": 0, "filled": 0, "canceled": 0, "rejected": 0, "expired": 0, "ttl_canceled": 0}
+    engine._order_stats = {
+        "submitted": 0,
+        "filled": 0,
+        "canceled": 0,
+        "rejected": 0,
+        "expired": 0,
+        "ttl_canceled": 0,
+    }
     engine._e5_ttl_cancel_events = []
     engine.retry_api_call = lambda fn, *a, **k: fn(*a, **k)
     engine._redact = lambda e: str(e)
@@ -94,7 +56,7 @@ def _make_engine(core_module):
 
 
 def test_process_pending_orders_cancels_unfilled_entry_after_ttl(monkeypatch):
-    core = _import_engine_core_with_stubs(monkeypatch)
+    core = import_engine_core_with_stubs(monkeypatch)
     engine = _make_engine(core)
     monkeypatch.setattr(core.time, "time", lambda: 1100.0)
 
@@ -113,7 +75,7 @@ def test_process_pending_orders_cancels_unfilled_entry_after_ttl(monkeypatch):
 
 
 def test_process_pending_orders_does_not_cancel_when_ttl_disabled(monkeypatch):
-    core = _import_engine_core_with_stubs(monkeypatch)
+    core = import_engine_core_with_stubs(monkeypatch)
     engine = _make_engine(core)
     engine._live_cancel_unfilled_entries = False
     monkeypatch.setattr(core.time, "time", lambda: 1100.0)
