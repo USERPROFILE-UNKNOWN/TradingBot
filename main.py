@@ -2,7 +2,7 @@ import os
 
 from modules.config_validate import validate_runtime_config
 from modules.database import DataManager
-from modules.logging_utils import configure_logging, get_logger
+from modules.logging_utils import configure_logging, get_component_logger
 from modules.startup_paths import resolve_db_placeholder_path
 from modules.ui import TradingApp
 from modules.utils import (
@@ -30,7 +30,7 @@ def main():
     # 1) Setup Paths
     paths = get_paths()
     configure_logging(paths.get("logs"))
-    log = get_logger(__name__)
+    log = get_component_logger(__name__, "startup")
     os.makedirs(paths["logs"], exist_ok=True)
     os.makedirs(paths["backup"], exist_ok=True)
 
