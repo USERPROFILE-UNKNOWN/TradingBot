@@ -3067,7 +3067,14 @@ class TradingEngine:
 
                     del self.pending_confirmations[sym]
             except Exception as e:
-                self._emit(f"Confirmation error: {e}", level="WARN", category="CONFIRM", symbol=symbol, throttle_key=f"conf_err_{symbol}", throttle_sec=60)
+                self._emit(
+                    f"Confirmation error ({type(e).__name__}): {self._redact(e)}",
+                    level="WARN",
+                    category="CONFIRM",
+                    symbol=symbol,
+                    throttle_key=f"conf_err_{symbol}",
+                    throttle_sec=60,
+                )
 
 
     def manage_active_positions_advanced(self):
@@ -3275,7 +3282,12 @@ class TradingEngine:
                 self._log_exec_packet(symbol=symbol, side="BUY", phase="ERROR", decision_id=decision_id, qty=qty, price=price, payload={"error": type(e).__name__})
             except Exception:
                 pass
-            self._emit(f"❌ Buy Failed: {self._redact(e)}", level="ERROR", category="ORDER", symbol=symbol)
+            self._emit(
+                f"❌ Buy Failed ({type(e).__name__}) | symbol={symbol} qty={qty} price={price}: {self._redact(e)}",
+                level="ERROR",
+                category="ORDER",
+                symbol=symbol,
+            )
 
     def execute_sell(self, symbol, qty, price):
         try:
@@ -3302,4 +3314,9 @@ class TradingEngine:
                 self._log_exec_packet(symbol=symbol, side="SELL", phase="ERROR", decision_id=None, qty=qty, price=price, payload={"error": type(e).__name__})
             except Exception:
                 pass
-            self._emit(f"❌ Sell Failed: {self._redact(e)}", level="ERROR", category="ORDER", symbol=symbol)
+            self._emit(
+                f"❌ Sell Failed ({type(e).__name__}) | symbol={symbol} qty={qty} price={price}: {self._redact(e)}",
+                level="ERROR",
+                category="ORDER",
+                symbol=symbol,
+            )
