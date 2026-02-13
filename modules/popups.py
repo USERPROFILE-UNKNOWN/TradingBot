@@ -5,7 +5,10 @@ import os
 from datetime import datetime
 
 # Phase 4 (v5.14.0): canonical watchlist access
+from .logging_utils import get_logger
 from .watchlist_api import get_watchlist_symbols
+
+log = get_logger(__name__)
 
 class StrategyEditor(ctk.CTkToplevel):
     def __init__(self, parent, strategy_name, config_data, on_save):
@@ -70,10 +73,7 @@ class DecisionViewer(ctk.CTkToplevel):
                 self.tree.insert("", "end", values=(datetime.now(), "", "ERROR", "", "", str(e)), tags=("gray",))
             except Exception:
                 pass
-            try:
-                print(f"[E_UI_DECISION_VIEWER] {type(e).__name__}: {e}")
-            except Exception:
-                pass
+            log.exception("[E_UI_DECISION_VIEWER] Failed to load decision rows")
             rows = []
 
         for row in rows:
