@@ -87,6 +87,7 @@ def default_split_config() -> configparser.ConfigParser:
 
         "log_decision_rejects": "False",
         "log_guardian_banner": "False",
+        "strict_config_validation": "False",
 
         # UI/telemetry log controls
         "log_file_enabled": "True",

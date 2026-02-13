@@ -1,37 +1,29 @@
 import os
+
+from modules.config_validate import validate_runtime_config
 from modules.database import DataManager
+from modules.logging_utils import configure_logging, get_logger
+from modules.startup_paths import resolve_db_placeholder_path
 from modules.ui import TradingApp
-from modules.utils import get_paths, ensure_split_config_layout, load_split_config, get_last_config_sanitizer_report
+from modules.utils import (
+    ensure_split_config_layout,
+    get_last_config_sanitizer_report,
+    get_paths,
+    load_split_config,
+)
+
 
 def _resolve_db_placeholder_path(paths, config) -> str:
-    """Resolve a placeholder db_path used only for call-site compatibility.
+    """Backward-compatible wrapper for startup db placeholder resolution."""
+    return resolve_db_placeholder_path(paths, config)
 
-    v5.14.0 Tier 3: DataManager operates in split-db mode only and uses CONFIGURATION->db_dir
-    for live DB files. This helper returns a stable path inside db_dir so callers can pass a
-    db_path without depending on legacy market_data.db semantics.
-    """
+
+def _is_strict_validation_enabled(config) -> bool:
     try:
-        raw = (config.get("CONFIGURATION", "db_dir", fallback="") or "").strip()
+        raw = config.get("CONFIGURATION", "strict_config_validation", fallback="False")
     except Exception:
-        raw = ""
-
-    db_dir = ""
-    if raw:
-        try:
-            raw = os.path.expandvars(os.path.expanduser(raw))
-        except Exception:
-            pass
-        if os.path.isabs(raw):
-            db_dir = raw
-        else:
-            base = paths.get('config_dir') or paths.get('root') or os.getcwd()
-            db_dir = os.path.normpath(os.path.join(base, raw))
-
-    if not db_dir:
-        db_dir = paths.get('db_dir') or os.path.join(paths.get('root', os.getcwd()), 'db')
-
-    return os.path.join(os.path.normpath(db_dir), 'market_data.db')
-
+        raw = "False"
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
 def main():
@@ -39,12 +31,25 @@ def main():
     paths = get_paths()
     os.makedirs(paths['logs'], exist_ok=True)
     os.makedirs(paths['backup'], exist_ok=True)
+    configure_logging(paths.get("logs"))
+    log = get_logger(__name__)
 
     # 2) Ensure split config layout (forward-only; creates missing split INIs)
     ensure_split_config_layout(paths)
 
     # 3) Load merged runtime config
     config = load_split_config(paths)
+
+    # 3.1) Validate runtime config (strict mode optional)
+    repv = validate_runtime_config(config)
+    for warning in repv.warnings:
+        log.warning("[CONFIG] %s", warning)
+
+    if repv.errors:
+        for err in repv.errors:
+            log.error("[CONFIG] %s", err)
+        if _is_strict_validation_enabled(config):
+            raise RuntimeError("Configuration validation failed in strict mode")
 
     # Config sanitizer warning (only if repairs were needed)
     try:
@@ -54,9 +59,13 @@ def main():
                 f"[CONFIG] ⚠️ Sanitizer repaired config.ini formatting (repairs={rep.get('repairs')}). "
                 f"Backup: {rep.get('backup_path', '')}"
             )
-            print(msg)
+            log.warning(msg)
             try:
-                with open(os.path.join(paths['logs'], 'config_sanitizer.log'), 'a', encoding='utf-8') as lf:
+                with open(
+                    os.path.join(paths["logs"], "config_sanitizer.log"),
+                    "a",
+                    encoding="utf-8",
+                ) as lf:
                     lf.write(msg + "\n")
             except Exception:
                 pass

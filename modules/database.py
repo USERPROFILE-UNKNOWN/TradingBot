@@ -11,6 +11,7 @@ import shutil
 import json
 from typing import Callable, Any, Dict, Iterable, List, Optional, Tuple
 
+from .logging_utils import get_logger
 
 
 class DataManager:
@@ -34,6 +35,7 @@ class DataManager:
         # v5.12.3 updateA: optional log callback (TradingApp.log) for DB diagnostics.
         # Safe default: None (falls back to print in a few places).
         self._log_cb = None
+        self._logger = get_logger(__name__)
 
         self.db_mode = 'split'
         self.split_mode = True
@@ -69,6 +71,7 @@ class DataManager:
             self._log_cb = cb
         except Exception:
             self._log_cb = None
+        self._logger = get_logger(__name__)
 
     def _log(self, msg: str) -> None:
         """Best-effort log sink for DB-layer diagnostics."""
@@ -79,7 +82,7 @@ class DataManager:
         except Exception:
             pass
         try:
-            print(msg)
+            self._logger.info(msg)
         except Exception:
             pass
 
@@ -253,7 +256,7 @@ class DataManager:
                             os.remove(path)
                         except Exception:
                             pass
-                        print(f"[DB] ⚠️ backtest_results.db schema was malformed; backed up to: {bdir}")
+                        self._logger.warning("[DB] ⚠️ backtest_results.db schema was malformed; backed up to: %s", bdir)
                     except Exception:
                         pass
                     conn = sqlite3.connect(path, check_same_thread=False)
@@ -935,7 +938,8 @@ class DataManager:
                     INSERT INTO decision_logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (datetime.now(), symbol, strategy, action, price, rsi, ai_score, sentiment, reason))
                 conn.commit()
-            except Exception as e: print(f"Log Decision Error: {e}")
+            except Exception:
+                self._logger.exception("Log Decision Error")
 
 
     # --------------------
@@ -1353,7 +1357,7 @@ class DataManager:
                 return len(payload)
             except Exception as e:
                 try:
-                    print(f"DB Error Saving Candidates: {e}")
+                    self._logger.exception("DB Error Saving Candidates")
                 except Exception:
                     pass
                 return 0
@@ -1429,7 +1433,8 @@ class DataManager:
                 except Exception:
                     pass
                 conn.commit()
-            except Exception as e: print(f"DB Error Rebuilding Backtest Table: {e}")
+            except Exception:
+                self._logger.exception("DB Error Rebuilding Backtest Table")
     def ensure_backtest_table(self, strategy_names):
         """Ensure backtest_results exists and contains columns for given strategies.
 
@@ -1515,7 +1520,7 @@ class DataManager:
                 conn.commit()
             except Exception as e:
                 try:
-                    print(f"DB Error Ensuring Backtest Table: {e}")
+                    self._logger.exception("DB Error Ensuring Backtest Table")
                 except Exception:
                     pass
 
@@ -1530,7 +1535,8 @@ class DataManager:
                 sql = f"INSERT OR REPLACE INTO backtest_results ({columns}) VALUES ({placeholders})"
                 cursor.execute(sql, list(data_dict.values()))
                 conn.commit()
-            except Exception as e: print(f"DB Error Saving Backtest: {e}")
+            except Exception:
+                self._logger.exception("DB Error Saving Backtest")
     def get_backtest_data(self):
         conn = self._conn("backtest_results")
         lock = self._lock("backtest_results")
@@ -1582,7 +1588,7 @@ class DataManager:
                 after = conn.total_changes
                 return max(0, after - before)
             except Exception as e:
-                print(f"DB Bulk Write Error: {e}")
+                self._logger.exception("DB Bulk Write Error")
                 return 0
     def save_snapshot(self, symbol, timestamp, price, open_p, high, low, volume, rsi, bbl, bbu, ema, adx, atr):
         conn = self._conn("historical_prices")
@@ -1597,7 +1603,8 @@ class DataManager:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (symbol, timestamp, price, open_p, high, low, volume, rsi, bbl, bbu, ema, adx, atr))
                 conn.commit()
-            except Exception as e: print(f"DB Write Error: {e}")
+            except Exception:
+                self._logger.exception("DB Write Error")
     def get_last_timestamp(self, symbol):
         conn = self._conn("historical_prices")
         lock = self._lock("historical_prices")
@@ -1735,7 +1742,8 @@ class DataManager:
                 cursor.execute('INSERT OR REPLACE INTO active_trades VALUES (?, ?, ?, ?, ?, ?)',
                             (symbol.upper(), qty, price, price, strategy, datetime.now()))
                 conn.commit()
-            except Exception as e: print(f"DB Trade Entry Error: {e}")
+            except Exception:
+                self._logger.exception("DB Trade Entry Error")
     def update_highest_price(self, symbol, new_high):
         conn = self._conn("active_trades")
         lock = self._lock("active_trades")
@@ -1801,7 +1809,7 @@ class DataManager:
                 cursor.execute("DELETE FROM active_trades WHERE symbol=?", (symbol.upper(),))
                 conn.commit()
             except Exception as e:
-                print(f"DB Remove Active Trade Error: {e}")
+                self._logger.exception("DB Remove Active Trade Error")
     def close_trade(self, symbol, exit_price):
         if self.split_mode:
             with self._multi_lock(["active_trades", "trade_history"]):
