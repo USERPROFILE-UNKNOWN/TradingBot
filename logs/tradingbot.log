@@ -1,8 +1,0 @@
-2026-02-16 16:38:13,904 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_key is empty; live trading API calls may fail
-2026-02-16 16:38:13,905 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_secret is empty; live trading API calls may fail
-2026-02-16 16:38:13,905 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
-2026-02-16 16:38:14,442 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ API not configured (set Alpaca keys in config/keys.ini)
-2026-02-16 16:38:14,605 | WARNING | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [W_ENGINE_API_NOT_CONFIGURED] Missing Alpaca API credentials (KEYS.alpaca_key / KEYS.alpaca_secret). Check config/keys.ini.
-2026-02-16 16:38:14,622 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
-2026-02-16 16:38:35,870 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
-2026-02-16 16:44:33,385 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.16_16.44.33_paper.json
