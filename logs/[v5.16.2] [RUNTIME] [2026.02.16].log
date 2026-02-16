@@ -1,0 +1,14 @@
+2026-02-16 16:38:14 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 16:38:14 | [SYSTEM] ℹ️ API not configured (set Alpaca keys in config/keys.ini)
+2026-02-16 16:38:14 | 🧠 [AI] Not enough data to train.
+2026-02-16 16:38:35 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 16:44:33 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_16.44.33_paper.json
+2026-02-16 17:15:29 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 17:15:36 | [SYSTEM] ⚠️ API Connected but account fetch failed
+2026-02-16 17:15:36 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-16 17:15:42 | [WARNING] [SYNC] ⚠️ Sync Failed: 'NoneType' object is not iterable
+2026-02-16 17:15:42 | 🧠 [AI] Not enough data to train.
+2026-02-16 17:15:49 | [E_ACCT_FETCH] APIError: unauthorized. | at=rest.py:83 raise_api_error()
+2026-02-16 17:16:03 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 17:17:50 | [E_ACCT_FETCH] APIError: unauthorized. | at=rest.py:83 raise_api_error()
+2026-02-16 17:17:54 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_17.17.54_paper.json
