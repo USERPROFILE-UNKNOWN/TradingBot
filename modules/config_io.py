@@ -564,6 +564,33 @@ def load_split_config(paths: Dict[str, str]) -> configparser.ConfigParser:
 
     # Read config.ini first so we can select paper/live keys.
     _read_ini_with_fallback(cfg, configuration_ini)
+
+    # Keep config.ini human-friendly: TradingView keys are stored in [CONFIGURATION]
+    # with comment headers. Hydrate a runtime [TRADINGVIEW] view when absent.
+    if not cfg.has_section("TRADINGVIEW"):
+        cfg.add_section("TRADINGVIEW")
+    for k in (
+        "enabled",
+        "listen_host",
+        "listen_port",
+        "secret",
+        "allowed_signals",
+        "mode",
+        "candidate_cooldown_minutes",
+        "autovalidation_enabled",
+        "autovalidation_cooldown_minutes",
+        "autovalidation_freshness_minutes",
+        "autovalidation_backfill_days",
+        "autovalidation_backtest_days",
+        "autovalidation_max_strategies",
+        "autovalidation_min_trades",
+        "autovalidation_max_concurrency",
+    ):
+        if not cfg.get("TRADINGVIEW", k, fallback="").strip():
+            v = cfg.get("CONFIGURATION", k, fallback="").strip()
+            if v != "":
+                cfg.set("TRADINGVIEW", k, v)
+
     _read_ini_with_fallback(cfg, watchlist_ini)
     _read_ini_with_fallback(cfg, strategy_ini)
 
@@ -607,7 +634,7 @@ def _append_missing_ini_options_preserve_comments(
     section_name: str,
     defaults_items: list[tuple[str, str]],
     descriptions: Dict[str, str] | None = None,
-    header_title: str = "MISSING DEFAULTS (auto-populated)",
+    header_title: str = "DEFAULTS SYNC (preserve comments)",
 ) -> int:
     """Add missing key/value pairs into the *target section* (not at EOF), preserving comments.
 
@@ -741,7 +768,7 @@ def _update_ini_section_values_preserve_comments(
     *,
     section_name: str,
     items: List[Tuple[str, str]],
-    header_title: str = "MISSING DEFAULTS (auto-populated)",
+    header_title: str = "DEFAULTS SYNC (preserve comments)",
     descriptions: Dict[str, str] | None = None,
 ) -> Tuple[int, int]:
     """Update existing key=value lines for a section in-place (preserve comments).
@@ -1036,9 +1063,12 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
         }
 
         keys_desc = {
-            "base_url": "Alpaca base URL (paper or live).",
-            "alpaca_key": "Alpaca API key.",
-            "alpaca_secret": "Alpaca API secret.",
+            "paper_base_url": "Paper trading Alpaca base URL.",
+            "paper_alpaca_key": "Paper trading Alpaca API key.",
+            "paper_alpaca_secret": "Paper trading Alpaca API secret.",
+            "live_base_url": "Live trading Alpaca base URL.",
+            "live_alpaca_key": "Live trading Alpaca API key.",
+            "live_alpaca_secret": "Live trading Alpaca API secret.",
             "telegram_token": "Telegram bot token (optional).",
             "telegram_chat_id": "Telegram chat id (optional).",
             "telegram_enabled": "Enable Telegram notifications.",
@@ -1058,28 +1088,21 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
                 section_name="CONFIGURATION",
                 defaults_items=list(defaults.items("CONFIGURATION")),
                 descriptions=cfg_desc,
-                header_title="MISSING CONFIGURATION KEYS (auto-populated)",
+                header_title="CONFIGURATION DEFAULTS SYNC",
             )
         except Exception:
             pass
 
-        # TRADINGVIEW section is optional. Create it if missing, then append any missing defaults.
+        # Keep TradingView keys inside [CONFIGURATION] under the TradingView section header.
         try:
             tv_defaults = list(defaults.items("TRADINGVIEW")) if defaults.has_section("TRADINGVIEW") else []
             if tv_defaults:
-                _ensure_ini_section_exists(
+                _append_missing_ini_options_preserve_comments(
                     paths["configuration_ini"],
-                    section_name="TRADINGVIEW",
+                    section_name="CONFIGURATION",
                     defaults_items=tv_defaults,
                     descriptions=tv_desc,
                     header_title="TRADINGVIEW (Webhook Integration)",
-                )
-
-                _append_missing_ini_options_preserve_comments(
-                    paths["configuration_ini"],
-                    section_name="TRADINGVIEW",
-                    defaults_items=tv_defaults,
-                    descriptions=tv_desc,
                 )
         except Exception:
             pass
@@ -1091,7 +1114,7 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
                 section_name="KEYS",
                 defaults_items=list(defaults.items("KEYS")),
                 descriptions=keys_desc,
-                header_title="MISSING KEYS DEFAULTS (auto-populated)",
+                header_title="KEYS DEFAULTS SYNC",
             )
         except Exception:
             pass
@@ -1117,7 +1140,11 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
         try:
             cfg_now = _new_config_parser()
             _read_ini_with_fallback(cfg_now, paths["configuration_ini"])
-            secret = (cfg_now.get("TRADINGVIEW", "secret", fallback="") or "").strip()
+            secret = (
+                cfg_now.get("TRADINGVIEW", "secret", fallback="")
+                or cfg_now.get("CONFIGURATION", "secret", fallback="")
+                or ""
+            ).strip()
 
             keys_now = _new_config_parser()
             _read_ini_with_fallback(keys_now, paths["keys_ini"])
@@ -1231,7 +1258,6 @@ def _ensure_ini_section_exists(
     block.append(f"[{section}]")
     title = header_title.strip() or section
     block.append(f"# {title}")
-    block.append(f"# AUTO-ADDED SECTION: {section}")
 
     desc = descriptions or {}
     for k, v in defaults_items:
