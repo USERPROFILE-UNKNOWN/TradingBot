@@ -1,0 +1,5 @@
+2026-02-16 16:38:14 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 16:38:14 | [SYSTEM] ℹ️ API not configured (set Alpaca keys in config/keys.ini)
+2026-02-16 16:38:14 | 🧠 [AI] Not enough data to train.
+2026-02-16 16:38:35 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 16:44:33 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_16.44.33_paper.json
