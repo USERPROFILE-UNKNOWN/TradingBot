@@ -1,0 +1,26 @@
+2026-02-16 17:47:43,374 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing KEYS.telegram_token; using default=***REDACTED***
+2026-02-16 17:47:43,375 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing KEYS.telegram_chat_id; using default=***REDACTED***
+2026-02-16 17:47:43,375 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing KEYS.tradingview_secret; using default=***REDACTED***
+2026-02-16 17:47:43,375 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_key is empty; live trading API calls may fail
+2026-02-16 17:47:43,375 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_secret is empty; live trading API calls may fail
+2026-02-16 17:47:43,375 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.telegram_token is empty; telegram notifications may not work
+2026-02-16 17:47:43,376 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.telegram_chat_id is empty; telegram notifications may not work
+2026-02-16 17:47:43,377 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
+2026-02-16 17:47:44,064 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ API not configured (set Alpaca keys in config/keys.ini)
+2026-02-16 17:47:44,271 | WARNING | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [W_ENGINE_API_NOT_CONFIGURED] Missing Alpaca API credentials (KEYS.alpaca_key / KEYS.alpaca_secret). Check config/keys.ini.
+2026-02-16 17:47:44,287 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
+2026-02-16 17:47:50,814 | ERROR | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [E_UI_INIT_FAIL] TradingApp initialization failed
+Traceback (most recent call last):
+  File "main.py", line 117, in main
+    app = TradingApp(config, db_manager)
+  File "modules\ui.py", line 98, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "modules\ui.py", line 249, in setup_ui
+    self.setup_settings_tab()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "modules\ui.py", line 875, in setup_settings_tab
+    self.ent_tel = ctk.CTkEntry(row3, show="*"); self.ent_tel.pack(side="left", padx=5); self.ent_tel.insert(0, self.config['KEYS']['telegram_token'])
+                                                                                                                ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "configparser.py", line 1276, in __getitem__
+KeyError: 'telegram_token'

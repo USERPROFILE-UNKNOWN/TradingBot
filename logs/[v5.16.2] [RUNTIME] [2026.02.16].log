@@ -1,0 +1,3 @@
+2026-02-16 17:47:43 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 17:47:44 | [SYSTEM] ℹ️ API not configured (set Alpaca keys in config/keys.ini)
+2026-02-16 17:47:44 | 🧠 [AI] Not enough data to train.
