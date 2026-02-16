@@ -245,7 +245,7 @@ class DataManager:
         """Resolve CONFIGURATION->db_dir.
 
         - Absolute paths: used as-is.
-        - Relative paths: resolved relative to TradingBot/config/ (paths['config_dir']) when available.
+        - Relative paths: resolved relative to TradingBot root (paths['root']) when available.
         - Fallback: directory containing db_path, or paths['db_dir'] if present.
         """
         raw = ""
@@ -258,7 +258,7 @@ class DataManager:
             raw = os.path.expandvars(os.path.expanduser(raw))
             if os.path.isabs(raw):
                 return os.path.normpath(raw)
-            base = (paths or {}).get("config_dir") or os.path.dirname(db_path)
+            base = (paths or {}).get("root") or os.path.dirname(db_path)
             return os.path.normpath(os.path.join(base, raw))
 
         if (paths or {}).get("db_dir"):

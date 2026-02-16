@@ -607,7 +607,7 @@ def _append_missing_ini_options_preserve_comments(
     section_name: str,
     defaults_items: list[tuple[str, str]],
     descriptions: Dict[str, str] | None = None,
-    header_title: str = "AUTO-ADDED DEFAULTS (preserve comments)",
+    header_title: str = "MISSING DEFAULTS (auto-populated)",
 ) -> int:
     """Add missing key/value pairs into the *target section* (not at EOF), preserving comments.
 
@@ -741,7 +741,7 @@ def _update_ini_section_values_preserve_comments(
     *,
     section_name: str,
     items: List[Tuple[str, str]],
-    header_title: str = "AUTO-ADDED DEFAULTS (preserve comments)",
+    header_title: str = "MISSING DEFAULTS (auto-populated)",
     descriptions: Dict[str, str] | None = None,
 ) -> Tuple[int, int]:
     """Update existing key=value lines for a section in-place (preserve comments).
@@ -932,6 +932,7 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
     """
 
     os.makedirs(paths["config_dir"], exist_ok=True)
+    _repair_legacy_db_folder_layout(paths)
 
     defaults = default_split_config()
 
@@ -1057,7 +1058,7 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
                 section_name="CONFIGURATION",
                 defaults_items=list(defaults.items("CONFIGURATION")),
                 descriptions=cfg_desc,
-                header_title="AUTO-ADDED DEFAULTS (preserve comments)",
+                header_title="MISSING CONFIGURATION KEYS (auto-populated)",
             )
         except Exception:
             pass
@@ -1090,7 +1091,7 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
                 section_name="KEYS",
                 defaults_items=list(defaults.items("KEYS")),
                 descriptions=keys_desc,
-                header_title="AUTO-ADDED DEFAULTS (preserve comments)",
+                header_title="MISSING KEYS DEFAULTS (auto-populated)",
             )
         except Exception:
             pass
@@ -1146,6 +1147,48 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
 
     # Fresh install: create all split files from defaults
     write_split_config(defaults, paths)
+
+
+def _repair_legacy_db_folder_layout(paths: Dict[str, str]) -> None:
+    """Move mistakenly nested config/db files back to root-level db/.
+
+    Some prior patch flows created DB files under TradingBot/config/db.
+    Runtime DB resolution is root-scoped (TradingBot/db), so we auto-heal this
+    layout to prevent split-mode startup failures.
+    """
+    try:
+        config_dir = paths.get("config_dir") or ""
+        root_dir = paths.get("root") or os.path.dirname(config_dir)
+        if not config_dir or not root_dir:
+            return
+
+        legacy_dir = os.path.join(config_dir, "db")
+        canonical_dir = paths.get("db_dir") or os.path.join(root_dir, "db")
+        if not os.path.isdir(legacy_dir):
+            return
+
+        os.makedirs(canonical_dir, exist_ok=True)
+
+        moved_any = False
+        for name in os.listdir(legacy_dir):
+            src = os.path.join(legacy_dir, name)
+            dst = os.path.join(canonical_dir, name)
+            if not os.path.isfile(src):
+                continue
+            if os.path.exists(dst):
+                continue
+            shutil.move(src, dst)
+            moved_any = True
+
+        if moved_any:
+            try:
+                if not os.listdir(legacy_dir):
+                    os.rmdir(legacy_dir)
+            except Exception:
+                pass
+    except Exception:
+        # Best-effort repair only; never block startup.
+        return
 
 def _ensure_ini_section_exists(
     ini_path: str,
@@ -1206,4 +1249,3 @@ def _ensure_ini_section_exists(
         p.write_text(new_text, encoding="utf-8")
 
     return True
-

@@ -21,7 +21,7 @@ def resolve_db_placeholder_path(paths, config) -> str:
         if os.path.isabs(raw):
             db_dir = raw
         else:
-            base = paths.get("config_dir") or paths.get("root") or os.getcwd()
+            base = paths.get("root") or os.getcwd()
             db_dir = os.path.normpath(os.path.join(base, raw))
 
     if not db_dir:
