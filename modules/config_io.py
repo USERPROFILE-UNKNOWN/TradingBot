@@ -18,6 +18,7 @@ import configparser
 import os
 import re
 import shutil
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, Iterable, List, Tuple
 
@@ -349,19 +350,238 @@ def write_split_config(cfg: configparser.ConfigParser, paths: Dict[str, str]) ->
     _write_ini(strat_cfg, paths["strategy_ini"])
 
 
-def load_split_config(paths: Dict[str, str]) -> configparser.ConfigParser:
-    """Load and merge the 4 split config files into a single runtime ConfigParser."""
-    cfg = _new_config_parser()
-    for p in (paths["configuration_ini"], paths["watchlist_ini"], paths["strategy_ini"], paths["keys_ini"]):
-        if os.path.exists(p):
-            if p == paths.get("configuration_ini"):
-                try:
-                    _sanitize_ini_section_formatting(p, section_name="CONFIGURATION")
-                except Exception:
-                    pass
-            _read_ini_with_fallback(cfg, p)
-    return cfg
+def _keys_ini_is_legacy_duplicate_schema(keys_ini_path: str) -> bool:
+    """Detect the legacy keys.ini format that repeats base_url/alpaca_key/alpaca_secret
+    inside a single [KEYS] section (separated by comment headers like ALPACA_PAPER / ALPACA_LIVE).
+    """
+    try:
+        raw = Path(keys_ini_path).read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return False
+    low = raw.lower()
+    if ("alpaca_paper" in low or "alpaca_live" in low or "telegram" in low) and low.count("base_url") >= 2:
+        return True
+    if ("alpaca_paper" in low or "alpaca_live" in low) and low.count("alpaca_key") >= 2:
+        return True
+    return False
 
+
+def _parse_keys_ini_loose(keys_ini_path: str) -> dict:
+    """Parse keys.ini without losing duplicated keys.
+
+    Supports:
+      1) Legacy single-section file with repeated base_url/alpaca_key/alpaca_secret blocks.
+      2) Cleaner schema using distinct keys (paper_* / live_*).
+      3) Optional explicit sections like [ALPACA_PAPER], [ALPACA_LIVE], [TELEGRAM], [TRADINGVIEW].
+
+    Returns canonical keys in lowercase:
+      paper_base_url, paper_alpaca_key, paper_alpaca_secret,
+      live_base_url, live_alpaca_key, live_alpaca_secret,
+      telegram_token, telegram_chat_id, telegram_enabled,
+      tradingview_secret
+    """
+    try:
+        raw = Path(keys_ini_path).read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return {}
+
+    out: dict[str, str] = {}
+    occ: dict[str, int] = {"base_url": 0, "alpaca_key": 0, "alpaca_secret": 0}
+    current: str | None = None
+
+    def _set(k: str, v: str):
+        if v is None:
+            v = ""
+        out[k] = str(v).strip()
+
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+
+        # Optional INI sections
+        if s.startswith("[") and s.endswith("]") and len(s) > 2:
+            sect = s[1:-1].strip().lower()
+            if "alpaca_paper" in sect or sect in ("paper", "alpaca paper", "alpaca_paper"):
+                current = "paper"
+            elif "alpaca_live" in sect or sect in ("live", "alpaca live", "alpaca_live"):
+                current = "live"
+            elif "telegram" in sect:
+                current = "telegram"
+            elif "tradingview" in sect:
+                current = "tradingview"
+            elif sect == "keys":
+                current = "keys"
+            else:
+                current = sect
+            continue
+
+        # Legacy block headers as comments
+        if s.startswith("#") or s.startswith(";"):
+            low = s.lower()
+            if "alpaca_paper" in low:
+                current = "paper"
+            elif "alpaca_live" in low:
+                current = "live"
+            elif "telegram" in low:
+                current = "telegram"
+            elif "tradingview" in low:
+                current = "tradingview"
+            continue
+
+        if "=" not in s:
+            continue
+
+        k_raw, v_raw = s.split("=", 1)
+        k = k_raw.strip().lower()
+        v = v_raw.strip()
+
+        if not k:
+            continue
+
+        # Clean schema
+        if k in (
+            "paper_base_url", "paper_alpaca_key", "paper_alpaca_secret",
+            "live_base_url", "live_alpaca_key", "live_alpaca_secret",
+            "telegram_token", "telegram_chat_id", "telegram_enabled",
+            "tradingview_secret",
+        ):
+            _set(k, v)
+            continue
+
+        # Legacy TradingView secret name
+        if k == "secret" and current == "tradingview":
+            _set("tradingview_secret", v)
+            continue
+
+        # Legacy Alpaca keys (duplicated)
+        if k in ("base_url", "alpaca_key", "alpaca_secret"):
+            if current in ("paper", "live"):
+                if k == "base_url":
+                    _set(f"{current}_base_url", v)
+                elif k == "alpaca_key":
+                    _set(f"{current}_alpaca_key", v)
+                else:
+                    _set(f"{current}_alpaca_secret", v)
+            else:
+                n = occ.get(k, 0)
+                occ[k] = n + 1
+                prefix = "paper" if n == 0 else "live"
+                if k == "base_url":
+                    _set(f"{prefix}_base_url", v)
+                elif k == "alpaca_key":
+                    _set(f"{prefix}_alpaca_key", v)
+                else:
+                    _set(f"{prefix}_alpaca_secret", v)
+            continue
+
+        if k in ("telegram_token", "telegram_chat_id", "telegram_enabled"):
+            _set(k, v)
+            continue
+
+    return out
+
+
+def _apply_keys_to_cfg(cfg: configparser.ConfigParser, keys_map: dict, paper_trading: bool) -> None:
+    """Merge keys_map into cfg's [KEYS] section and populate active base_url/alpaca_* fields."""
+    if not cfg.has_section("KEYS"):
+        cfg.add_section("KEYS")
+
+    # Record environment selection for downstream consumers (e.g., broker gateway defaults).
+    cfg.set("KEYS", "paper_trading", "True" if paper_trading else "False")
+
+    canonical = [
+        "paper_base_url", "paper_alpaca_key", "paper_alpaca_secret",
+        "live_base_url", "live_alpaca_key", "live_alpaca_secret",
+        "telegram_token", "telegram_chat_id", "telegram_enabled",
+        "tradingview_secret",
+    ]
+    for k in canonical:
+        v = keys_map.get(k)
+        if v is not None and str(v).strip() != "":
+            cfg.set("KEYS", k, str(v).strip())
+
+    prefix = "paper" if paper_trading else "live"
+
+    # Prefer environment-scoped keys, then fall back to legacy single-key layout.
+    base_url = (
+        keys_map.get(f"{prefix}_base_url")
+        or cfg.get("KEYS", f"{prefix}_base_url", fallback="").strip()
+        or keys_map.get("base_url")
+        or cfg.get("KEYS", "base_url", fallback="").strip()
+    )
+    alpaca_key = (
+        keys_map.get(f"{prefix}_alpaca_key")
+        or cfg.get("KEYS", f"{prefix}_alpaca_key", fallback="").strip()
+        or keys_map.get("alpaca_key")
+        or cfg.get("KEYS", "alpaca_key", fallback="").strip()
+    )
+    alpaca_secret = (
+        keys_map.get(f"{prefix}_alpaca_secret")
+        or cfg.get("KEYS", f"{prefix}_alpaca_secret", fallback="").strip()
+        or keys_map.get("alpaca_secret")
+        or cfg.get("KEYS", "alpaca_secret", fallback="").strip()
+    )
+
+    cfg.set("KEYS", "base_url", str(base_url or "").strip())
+    cfg.set("KEYS", "alpaca_key", str(alpaca_key or "").strip())
+    cfg.set("KEYS", "alpaca_secret", str(alpaca_secret or "").strip())
+
+    # Bridge TradingView secret for callers still reading [TRADINGVIEW].secret
+    tv = keys_map.get("tradingview_secret") or cfg.get("KEYS", "tradingview_secret", fallback="").strip()
+    if tv:
+        if not cfg.has_section("TRADINGVIEW"):
+            cfg.add_section("TRADINGVIEW")
+        if not cfg.get("TRADINGVIEW", "secret", fallback="").strip():
+            cfg.set("TRADINGVIEW", "secret", tv)
+
+
+def load_split_config(paths: Dict[str, str]) -> configparser.ConfigParser:
+    """Load split .ini configs with robust keys.ini parsing.
+
+    keys.ini historically used repeated key names inside [KEYS] (paper/live blocks). Python's
+    configparser collapses duplicates, which can make the app think credentials are missing.
+    We load keys.ini with a loose parser and then materialize both:
+      - canonical paper_* / live_* keys
+      - active base_url/alpaca_key/alpaca_secret keys (selected by paper_trading)
+
+    This keeps the rest of the codebase (and older validators/tests) working without requiring
+    a destructive rewrite of existing keys.ini files.
+    """
+    cfg = _new_config_parser()
+
+    configuration_ini = paths.get("configuration_ini", "")
+    watchlist_ini = paths.get("watchlist_ini", "")
+    strategy_ini = paths.get("strategy_ini", "")
+    keys_ini = paths.get("keys_ini", "")
+
+    # Guardrail: repair merged/corrupted CONFIGURATION lines before parsing.
+    # This prevents configparser from swallowing extra assignments as part of a value.
+    try:
+        sanitize_configuration_ini_if_needed(paths, section_name="CONFIGURATION")
+    except Exception:
+        pass
+
+    # Read config.ini first so we can select paper/live keys.
+    _read_ini_with_fallback(cfg, configuration_ini)
+    _read_ini_with_fallback(cfg, watchlist_ini)
+    _read_ini_with_fallback(cfg, strategy_ini)
+
+    # Determine paper/live selection (support older key name 'paper' as fallback)
+    try:
+        paper_trading = cfg.getboolean("CONFIGURATION", "paper_trading", fallback=cfg.getboolean("CONFIGURATION", "paper", fallback=True))
+    except Exception:
+        paper_trading = True
+
+    # Load keys.ini without losing duplicates
+    if keys_ini and os.path.exists(keys_ini):
+        keys_map = _parse_keys_ini_loose(keys_ini)
+        _apply_keys_to_cfg(cfg, keys_map, paper_trading)
+    else:
+        if not cfg.has_section("KEYS"):
+            cfg.add_section("KEYS")
+
+    return cfg
 
 def _detect_text_encoding(path: str) -> str:
     """Best-effort encoding detection for INI files; preserves existing user files."""
@@ -379,66 +599,141 @@ def _detect_text_encoding(path: str) -> str:
         return "utf-8"
 
 
+
+
+
 def _append_missing_ini_options_preserve_comments(
     path: str,
-    *,
     section_name: str,
-    defaults_items: List[Tuple[str, str]],
+    defaults_items: list[tuple[str, str]],
     descriptions: Dict[str, str] | None = None,
-    header_title: str = "AUTO-ADDED DEFAULTS",
+    header_title: str = "AUTO-ADDED DEFAULTS (preserve comments)",
 ) -> int:
-    """Append missing key=value lines without rewriting the INI (preserve comments)."""
+    """Add missing key/value pairs into the *target section* (not at EOF), preserving comments.
+
+    - Does NOT overwrite existing values.
+    - Preserves file structure and user edits.
+    - Inserts before the next [SECTION] header.
+
+    Returns the number of keys written.
+    """
     if not os.path.exists(path):
         return 0
 
-    enc = _detect_text_encoding(path)
-    try:
-        with open(path, "r", encoding=enc, errors="replace") as f:
-            text = f.read()
-    except Exception:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            text = f.read()
-
-    if f"[{section_name}]" not in text:
+    section = (section_name or "").strip()
+    if not section:
         return 0
 
-    missing: List[Tuple[str, str]] = []
-    for k, v in defaults_items:
-        key = str(k).strip()
-        if not key:
-            continue
-        # Robust presence check: prefer start-of-line, but also detect keys that may be mid-line in a damaged file.
-        if re.search(rf"^\s*{re.escape(key)}\s*=", text, flags=re.IGNORECASE | re.MULTILINE):
-            continue
-        if re.search(rf"\b{re.escape(key)}\s*=", text, flags=re.IGNORECASE):
-            continue
-        missing.append((key, str(v)))
+    import re as _re
 
+    lines = Path(path).read_text(encoding="utf-8", errors="ignore").splitlines(True)
+
+    sec_re = _re.compile(r"^\s*\[\s*" + _re.escape(section) + r"\s*\]\s*$", _re.IGNORECASE)
+    any_sec_re = _re.compile(r"^\s*\[[^\]]+\]\s*$")
+
+    start_idx = None
+    for i, ln in enumerate(lines):
+        if sec_re.match(ln.strip()):
+            start_idx = i
+            break
+    if start_idx is None:
+        return 0
+
+    end_idx = len(lines)
+    for j in range(start_idx + 1, len(lines)):
+        if any_sec_re.match(lines[j].strip()):
+            end_idx = j
+            break
+
+    existing = set()
+    for ln in lines[start_idx + 1 : end_idx]:
+        s = ln.strip()
+        if not s or s.startswith('#') or s.startswith(';'):
+            continue
+        if '=' not in s:
+            continue
+        k = s.split('=', 1)[0].strip().lower()
+        if k:
+            existing.add(k)
+
+    required = [(k, v) for (k, v) in (defaults_items or []) if isinstance(k, str)]
+    missing = [(k, v) for (k, v) in required if k.strip().lower() not in existing]
     if not missing:
         return 0
 
-    lines: List[str] = []
-    if not text.endswith("\n"):
-        lines.append("\n")
+    descriptions = descriptions or {}
+    insert_lines: list[str] = []
+    insert_lines.append("\n")
+    insert_lines.append("#  ==========================\n")
+    insert_lines.append(f"#  {header_title}\n")
+    insert_lines.append("#  ==========================\n")
 
-    lines.append("#  ==========================\n")
-    lines.append(f"# {header_title}\n")
-    lines.append("#  ==========================\n")
-
-    desc_map = descriptions or {}
     for k, v in missing:
-        desc = (desc_map.get(k) or desc_map.get(k.lower()) or "").strip()
-        lines.append(f"# {desc if desc else 'Auto-added default setting.'}\n")
-        lines.append(f"{k} = {v}\n")
+        desc = descriptions.get(k, "Auto-added default setting.")
+        insert_lines.append(f"# {desc}\n")
+        insert_lines.append(f"{k} = {v}\n")
+        insert_lines.append("\n")
 
-    try:
-        with open(path, "a", encoding=enc, errors="replace", newline="\n") as f:
-            f.writelines(lines)
-    except Exception:
-        with open(path, "a", encoding="utf-8", errors="replace", newline="\n") as f:
-            f.writelines(lines)
-
+    new_lines = lines[:end_idx] + insert_lines + lines[end_idx:]
+    Path(path).write_text(''.join(new_lines), encoding='utf-8')
     return len(missing)
+
+
+def _remove_keys_from_ini_section_preserve_comments(
+    path: str,
+    section_name: str,
+    keys_to_remove: list[str],
+) -> int:
+    """Remove specific key=value lines from a section while preserving comments and other text."""
+    if not os.path.exists(path):
+        return 0
+
+    section = (section_name or "").strip()
+    if not section or not keys_to_remove:
+        return 0
+
+    import re as _re
+
+    keys_lc = {k.strip().lower() for k in keys_to_remove if isinstance(k, str) and k.strip()}
+    if not keys_lc:
+        return 0
+
+    lines = Path(path).read_text(encoding="utf-8", errors="ignore").splitlines(True)
+
+    sec_re = _re.compile(r"^\s*\[\s*" + _re.escape(section) + r"\s*\]\s*$", _re.IGNORECASE)
+    any_sec_re = _re.compile(r"^\s*\[[^\]]+\]\s*$")
+
+    start_idx = None
+    for i, ln in enumerate(lines):
+        if sec_re.match(ln.strip()):
+            start_idx = i
+            break
+    if start_idx is None:
+        return 0
+
+    end_idx = len(lines)
+    for j in range(start_idx + 1, len(lines)):
+        if any_sec_re.match(lines[j].strip()):
+            end_idx = j
+            break
+
+    removed = 0
+    out = []
+    out.extend(lines[: start_idx + 1])
+
+    for ln in lines[start_idx + 1 : end_idx]:
+        s = ln.strip()
+        if s and not s.startswith('#') and not s.startswith(';') and '=' in s:
+            k = s.split('=', 1)[0].strip().lower()
+            if k in keys_lc:
+                removed += 1
+                continue
+        out.append(ln)
+
+    out.extend(lines[end_idx:])
+    if removed:
+        Path(path).write_text(''.join(out), encoding='utf-8')
+    return removed
 
 
 def _update_ini_section_values_preserve_comments(
@@ -663,7 +958,7 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             _write_ini(keys_cfg, paths["keys_ini"])
 
         if not os.path.exists(paths["configuration_ini"]):
-            cfg_cfg = _clone_sections(defaults, ["CONFIGURATION"])
+            cfg_cfg = _clone_sections(defaults, ["CONFIGURATION", "TRADINGVIEW"])
             if not cfg_cfg.has_section("CONFIGURATION"):
                 cfg_cfg.add_section("CONFIGURATION")
             _write_ini(cfg_cfg, paths["configuration_ini"])
@@ -729,11 +1024,26 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             "ui_refresh_ms": "Normal UI refresh cadence for the main UI loop (milliseconds).",
             "miniplayer_ui_refresh_ms": "Miniplayer UI refresh cadence (milliseconds). Slower = lower CPU.",
         }
-        keys_desc = {
-            "alpaca_key_id": "Alpaca API Key ID.",
-            "alpaca_secret_key": "Alpaca API Secret Key.",
-            "alpaca_base_url": "Alpaca base URL (paper or live).",
+
+        tv_desc = {
+            "enabled": "Enable TradingView webhook receiver (stdlib HTTP server).",
+            "listen_host": "Bind address for the webhook server (recommend 127.0.0.1).",
+            "listen_port": "Bind port for the webhook server (1-65535).",
+            "secret": "Shared secret required for auth (strict mode requires when enabled).",
+            "allowed_signals": "Optional CSV allow-list (e.g. BUY,SELL). Empty = allow all.",
+            "mode": "OFF|ADVISORY|PAPER|LIVE (pipeline stage; v5.14.5 persists alerts only).",
         }
+
+        keys_desc = {
+            "base_url": "Alpaca base URL (paper or live).",
+            "alpaca_key": "Alpaca API key.",
+            "alpaca_secret": "Alpaca API secret.",
+            "telegram_token": "Telegram bot token (optional).",
+            "telegram_chat_id": "Telegram chat id (optional).",
+            "telegram_enabled": "Enable Telegram notifications.",
+            "tradingview_secret": "TradingView webhook shared secret (kept in keys.ini).",
+        }
+
 
         # Repair any formatting damage (prevents key-lines getting concatenated / hidden)
         try:
@@ -752,9 +1062,31 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
         except Exception:
             pass
 
+        # TRADINGVIEW section is optional. Create it if missing, then append any missing defaults.
+        try:
+            tv_defaults = list(defaults.items("TRADINGVIEW")) if defaults.has_section("TRADINGVIEW") else []
+            if tv_defaults:
+                _ensure_ini_section_exists(
+                    paths["configuration_ini"],
+                    section_name="TRADINGVIEW",
+                    defaults_items=tv_defaults,
+                    descriptions=tv_desc,
+                    header_title="TRADINGVIEW (Webhook Integration)",
+                )
+
+                _append_missing_ini_options_preserve_comments(
+                    paths["configuration_ini"],
+                    section_name="TRADINGVIEW",
+                    defaults_items=tv_defaults,
+                    descriptions=tv_desc,
+                )
+        except Exception:
+            pass
+
         try:
             _append_missing_ini_options_preserve_comments(
                 paths["keys_ini"],
+
                 section_name="KEYS",
                 defaults_items=list(defaults.items("KEYS")),
                 descriptions=keys_desc,
@@ -763,7 +1095,115 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
         except Exception:
             pass
 
+        # ---- Hotfix v5.16.2: repair misfiled keys from prior patch runs ----
+        # 1) Remove non-secret config keys that were incorrectly injected into keys.ini
+        try:
+            _remove_keys_from_ini_section_preserve_comments(paths["keys_ini"], "KEYS", ["data_feed"])
+        except Exception:
+            pass
+
+        # 2) Remove obsolete/legacy keys that were incorrectly appended into the TRADINGVIEW section
+        try:
+            _remove_keys_from_ini_section_preserve_comments(
+                paths["configuration_ini"],
+                "TRADINGVIEW",
+                ["paper", "allow_live", "webhook_secret"],
+            )
+        except Exception:
+            pass
+
+        # 3) One-way migration: move TRADINGVIEW.secret -> KEYS.tradingview_secret (copy then blank)
+        try:
+            cfg_now = _new_config_parser()
+            _read_ini_with_fallback(cfg_now, paths["configuration_ini"])
+            secret = (cfg_now.get("TRADINGVIEW", "secret", fallback="") or "").strip()
+
+            keys_now = _new_config_parser()
+            _read_ini_with_fallback(keys_now, paths["keys_ini"])
+            keys_secret = (keys_now.get("KEYS", "tradingview_secret", fallback="") or "").strip()
+
+            if secret and not keys_secret:
+                _update_ini_section_values_preserve_comments(
+                    paths["keys_ini"],
+                    section_name="KEYS",
+                    items=[("tradingview_secret", secret)],
+                    descriptions={"tradingview_secret": "TradingView webhook shared secret (kept in keys.ini)."},
+                    header_title="TRADINGVIEW (secret)",
+                )
+
+                _update_ini_section_values_preserve_comments(
+                    paths["configuration_ini"],
+                    section_name="TRADINGVIEW",
+                    items=[("secret", "")],
+                    descriptions={"secret": "TradingView webhook secret moved to keys.ini (tradingview_secret)."},
+                    header_title="TRADINGVIEW (Webhook Integration)",
+                )
+        except Exception:
+            pass
+
+
         return
 
     # Fresh install: create all split files from defaults
     write_split_config(defaults, paths)
+
+def _ensure_ini_section_exists(
+    ini_path: str,
+    section_name: str,
+    defaults_items: List[Tuple[str, str]],
+    descriptions: Optional[Dict[str, str]] = None,
+    header_title: str = "",
+) -> bool:
+    """Ensure `ini_path` contains a section header `[section_name]`.
+
+    If the section is missing, append it at the end of the file along with
+    `defaults_items` (and optional comment descriptions). Returns True if the
+    file was modified.
+    """
+    p = Path(ini_path)
+    if not p.exists():
+        return False
+
+    section = section_name
+
+    try:
+        enc = _detect_text_encoding(str(p))
+    except Exception:
+        enc = "utf-8"
+
+    try:
+        text = p.read_text(encoding=enc, errors="ignore")
+    except Exception:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+
+    header_re = re.compile(r"^\s*\[" + re.escape(section) + r"\]\s*$", re.IGNORECASE | re.MULTILINE)
+    if header_re.search(text):
+        return False
+
+    block: List[str] = []
+    if text and not text.endswith("\n"):
+        text += "\n"
+
+    block.append("")
+    block.append(f"[{section}]")
+    title = header_title.strip() or section
+    block.append(f"# {title}")
+    block.append(f"# AUTO-ADDED SECTION: {section}")
+
+    desc = descriptions or {}
+    for k, v in defaults_items:
+        d = desc.get(k)
+        if d:
+            block.append(f"# {d}")
+        block.append(f"{k} = {v}")
+        block.append("")
+
+    new_text = text + "\n".join(block).rstrip() + "\n"
+
+    try:
+        p.write_text(new_text, encoding=enc)
+    except Exception:
+        p.write_text(new_text, encoding="utf-8")
+
+    return True
+

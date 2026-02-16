@@ -16,11 +16,11 @@ set "SS=%datetime:~12,2%"
 
 :: --- 2. USER INPUT ---
 echo ==========================================================
-echo      TRADINGBOT SETUP MANAGER (v5.14.0)
+echo      TRADINGBOT SETUP MANAGER (v5.16.2)
 echo ==========================================================
 echo.
-set /p TARGET_VERSION="Enter Version (e.g. v5.14.0): "
-if "%TARGET_VERSION%"=="" set TARGET_VERSION=v5.14.0
+set /p TARGET_VERSION="Enter Version (e.g. v5.16.2): "
+if "%TARGET_VERSION%"=="" set TARGET_VERSION=v5.16.2
 
 :: Define Log File
 if not exist "%ROOT_DIR%\logs" mkdir "%ROOT_DIR%\logs"
@@ -81,11 +81,20 @@ exit /b
         echo [WARN] pkg_resources missing; pinning setuptools to 81.0.0...
         python -m pip install --upgrade --force-reinstall "setuptools==81.0.0"
     )
-    python -m pip install customtkinter alpaca-trade-api pandas_ta pandas requests pyinstaller matplotlib numpy vaderSentiment scikit-learn scipy yfinance
+    python -m pip install customtkinter alpaca-trade-api pandas_ta pandas requests pyinstaller matplotlib numpy vaderSentiment scikit-learn scipy yfinance pytest
     python -m pip install jaraco.text jaraco.classes jaraco.context platformdirs packaging more-itertools
 
     echo.
-    echo [STEP 2b] Downloading Intel TBB Redist (Windows x64)...
+    echo [STEP 2b] Running Smoke Tests...
+    call "%ROOT_DIR%\run_tests.bat"
+    if errorlevel 1 (
+        echo.
+        echo [FATAL ERROR] Test suite failed. Aborting build.
+        exit /b 1
+    )
+
+    echo.
+    echo [STEP 2c] Downloading Intel TBB Redist (Windows x64)...
     
     REM v3.9.23 FIX: Force .zip extension so Expand-Archive accepts it
     set "TBB_VER=2022.3.0.380"

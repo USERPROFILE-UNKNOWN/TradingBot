@@ -20,9 +20,24 @@ class _DummyAPI:
         self.canceled.append(oid)
 
 
+class _DummyGateway:
+    """API-like wrapper matching BrokerGateway surface in v5.15.0."""
+
+    def __init__(self):
+        self._api = _DummyAPI()
+
+    def retry_api_call(self, func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._api, name)
+
+
+
+
 def _make_engine(core_module):
     engine = core_module.TradingEngine.__new__(core_module.TradingEngine)
-    engine.api = _DummyAPI()
+    engine.api = _DummyGateway()
     engine.db = _DummyDB()
     engine.pending_orders = {
         "oid-1": {
@@ -46,7 +61,6 @@ def _make_engine(core_module):
         "ttl_canceled": 0,
     }
     engine._e5_ttl_cancel_events = []
-    engine.retry_api_call = lambda fn, *a, **k: fn(*a, **k)
     engine._redact = lambda e: str(e)
     engine._log_exec_packet = lambda **_kwargs: None
     engine._emit_calls = []

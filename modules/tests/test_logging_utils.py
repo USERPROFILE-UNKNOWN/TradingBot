@@ -20,6 +20,7 @@ def test_context_defaults_filter_populates_missing_fields():
     assert rec.symbol == "-"
     assert rec.order_id == "-"
     assert rec.strategy == "-"
+    assert rec.mode == "-"
 
 
 def test_component_logger_injects_component_field(caplog):

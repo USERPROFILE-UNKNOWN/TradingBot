@@ -8,7 +8,16 @@ def import_engine_core_with_stubs(monkeypatch):
     monkeypatch.setitem(sys.modules, "alpaca_trade_api", types.ModuleType("alpaca_trade_api"))
     monkeypatch.setitem(sys.modules, "pandas_ta", types.ModuleType("pandas_ta"))
     monkeypatch.setitem(sys.modules, "pandas", types.ModuleType("pandas"))
-    monkeypatch.setitem(sys.modules, "requests", types.ModuleType("requests"))
+
+    # Minimal requests.exceptions surface so retry_api_call() can execute safely.
+    fake_requests = types.ModuleType("requests")
+
+    class _ReqExc:
+        ConnectionError = Exception
+        ReadTimeout = Exception
+
+    fake_requests.exceptions = _ReqExc
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
 
     fake_strategies = types.ModuleType("modules.strategies")
 
@@ -37,6 +46,11 @@ def import_engine_core_with_stubs(monkeypatch):
 
     class _DummyOracle:
         def __init__(self, *_args, **_kwargs):
+            return None
+
+        # TradingEngine spawns a daemon thread that calls train_model().
+        # Keep it a no-op to avoid noisy thread exceptions during tests.
+        def train_model(self):
             return None
 
     fake_ai.AI_Oracle = _DummyOracle

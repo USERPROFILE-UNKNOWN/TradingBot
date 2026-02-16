@@ -107,6 +107,97 @@ class CandidateScanner:
 
         return scan_id, out
 
+
+    def score_single_symbol(
+        self,
+        symbol: str,
+        *,
+        universe: str = "TRADINGVIEW",
+        extra_details: Optional[Dict[str, Any]] = None,
+        force_accept: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Score one symbol using the same scoring model as scan_today.
+
+        Intended for real-time candidate sources (e.g., TradingView alerts).
+        Returns a DB-ready candidate row dict, or None if symbol is empty.
+
+        Notes:
+        - Uses config's lookback bars for consistent scoring.
+        - For real-time sources we relax min-bars / min-dollar-volume gating,
+          but still falls back safely if history is missing.
+        """
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return None
+
+        scan_ts = datetime.now(timezone.utc)
+        scan_date = scan_ts.strftime("%Y-%m-%d")
+
+        lookback_bars = self._cfg_int("candidate_scanner_lookback_bars", 390)
+        # Relax gating for real-time sources; we still rely on history if available.
+        min_bars = 1
+        min_dv = 0.0
+
+        r = None
+        try:
+            r = self._score_symbol(
+                sym,
+                lookback_bars=lookback_bars,
+                min_bars=min_bars,
+                min_dollar_volume=min_dv,
+                include_negative_movers=True,
+                universe=(universe or "TRADINGVIEW").strip().upper(),
+            )
+        except Exception:
+            r = None
+
+        details: Dict[str, Any] = {}
+        if r is None:
+            if not force_accept:
+                return None
+            details = {
+                "reason": "no_history_or_unscoreable",
+                "last_price": None,
+                "bars": 0,
+                "ret_pct": 0.0,
+                "dollar_volume": 0.0,
+                "volatility": 0.0,
+            }
+            score = 0.0
+            ret_lookback = 0.0
+            dv = 0.0
+            vol = 0.0
+            bars = 0
+            uni = (universe or "TRADINGVIEW").strip().upper()
+        else:
+            details = dict(r.details or {})
+            score = float(r.score or 0.0)
+            ret_lookback = float(r.ret_lookback or 0.0)
+            dv = float(r.dollar_volume or 0.0)
+            vol = float(r.volatility or 0.0)
+            bars = int(r.bars or 0)
+            uni = (r.universe or universe or "TRADINGVIEW").strip().upper()
+
+        if extra_details:
+            try:
+                details.update({k: v for k, v in dict(extra_details).items() if k})
+            except Exception:
+                pass
+
+        details_json = json.dumps(details, ensure_ascii=False, separators=(",", ":"))
+        return {
+            "scan_ts": scan_ts.isoformat(),
+            "scan_date": scan_date,
+            "symbol": sym,
+            "score": float(score),
+            "ret_lookback": float(ret_lookback),
+            "dollar_volume": float(dv),
+            "volatility": float(vol),
+            "bars": int(bars),
+            "universe": uni,
+            "details_json": details_json,
+        }
+
     # -----------------------------
     # Internals
     # -----------------------------

@@ -3,6 +3,10 @@
 import customtkinter as ctk
 import threading
 import json
+import time
+import uuid
+import urllib.request
+import urllib.error
 from tkinter import ttk, messagebox
 from datetime import datetime, timezone
 
@@ -71,12 +75,14 @@ class CandidatesTab:
         self.btn_add_watchlist = ctk.CTkButton(btns, text="ADD TO WATCHLIST", fg_color="#00695C", command=self.add_selected_to_watchlist)
         self.btn_backtest = ctk.CTkButton(btns, text="BACKTEST SELECTED", fg_color="#1976D2", command=self.backtest_selected)
         self.btn_fetch = ctk.CTkButton(btns, text="FETCH CANDIDATES", fg_color="#7B1FA2", command=self.fetch_candidates_thread)
+        self.btn_test_webhook = ctk.CTkButton(btns, text="TEST WEBHOOK", fg_color="#455A64", command=self.send_test_webhook_thread)
 
         # Row 0
         self.btn_fetch.grid(row=0, column=0, padx=5, pady=3, sticky="e")
         self.btn_backtest.grid(row=0, column=1, padx=5, pady=3, sticky="e")
         self.btn_add_watchlist.grid(row=0, column=2, padx=5, pady=3, sticky="e")
         # Row 1
+        self.btn_test_webhook.grid(row=1, column=0, padx=5, pady=3, sticky="e")
         self.btn_apply_policy.grid(row=1, column=1, padx=5, pady=3, sticky="e")
         self.btn_refresh.grid(row=1, column=2, padx=5, pady=3, sticky="e")
 
@@ -261,6 +267,63 @@ class CandidatesTab:
             return
 
         self._call_ui(self.refresh_from_db)
+
+    def send_test_webhook_thread(self):
+        t = threading.Thread(target=self._send_test_webhook, daemon=True)
+        t.start()
+
+    def _send_test_webhook(self):
+        """Stdlib-only localhost POST to validate webhook ingestion end-to-end."""
+        try:
+            port = int(self.config.get("TRADINGVIEW", "listen_port", fallback="5001"))
+        except Exception:
+            port = 5001
+
+        try:
+            secret = (self.config.get("TRADINGVIEW", "secret", fallback="") or "").strip()
+        except Exception:
+            secret = ""
+
+        url = f"http://127.0.0.1:{port}/tradingview"
+        payload = {
+            "ts": int(time.time()),
+            "symbol": "AAPL",
+            "exchange": "NASDAQ",
+            "timeframe": "15",
+            "signal": "BUY",
+            "price": 123.45,
+            "idempotency_key": f"test_{uuid.uuid4().hex[:12]}",
+        }
+        if secret:
+            payload["secret"] = secret
+
+        data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if secret:
+            headers["X-Webhook-Secret"] = secret
+
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                code = getattr(resp, "status", resp.getcode())
+
+            # Refresh candidates shortly after posting
+            self.app.after(100, self.refresh_from_db)
+            self.app.after(150, lambda: messagebox.showinfo("Test Webhook", f"POST {url}\nStatus: {code}\n\n{body}"))
+
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            self.app.after(150, lambda: messagebox.showerror("Test Webhook", f"HTTPError {e.code}\nPOST {url}\n\n{body}"))
+
+        except Exception as e:
+            self.app.after(150, lambda: messagebox.showerror("Test Webhook", f"Failed to POST {url}\n\n{e}"))
+
 
     def backtest_selected(self):
         sym = (self._selected_symbol or "").strip().upper()

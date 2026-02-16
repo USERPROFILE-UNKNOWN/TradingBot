@@ -1,0 +1,25 @@
+2026-02-16 15:27:00,777 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.enabled; using default=False
+2026-02-16 15:27:00,777 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.mode; using default='ADVISORY'
+2026-02-16 15:27:00,777 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.candidate_cooldown_minutes; using default=5
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_enabled; using default=True
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_cooldown_minutes; using default=10
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_freshness_minutes; using default=30
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_backfill_days; using default=60
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_backtest_days; using default=14
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_max_strategies; using default=6
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_min_trades; using default=1
+2026-02-16 15:27:00,778 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] Missing TRADINGVIEW.autovalidation_max_concurrency; using default=1
+2026-02-16 15:27:00,779 | ERROR | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_key is empty; live trading API calls may fail
+2026-02-16 15:27:00,779 | ERROR | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_secret is empty; live trading API calls may fail
+2026-02-16 15:27:00,779 | ERROR | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [E_CFG_STRICT_VALIDATION_FAILED] Configuration validation failed in strict mode
+2026-02-16 16:08:01,433 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_key is empty; live trading API calls may fail
+2026-02-16 16:08:01,433 | WARNING | __main__ | component=startup mode=OFF symbol=- order_id=- strategy=- | [CONFIG] KEYS.alpaca_secret is empty; live trading API calls may fail
+2026-02-16 16:08:01,435 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\config\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
+2026-02-16 16:08:03,829 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ API not configured (set Alpaca keys in config/keys.ini)
+2026-02-16 16:08:04,013 | WARNING | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [W_ENGINE_API_NOT_CONFIGURED] Missing Alpaca API credentials (KEYS.alpaca_key / KEYS.alpaca_secret). Check config/keys.ini.
+2026-02-16 16:08:04,057 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
+2026-02-16 16:08:26,189 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 16:08:26,197 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 📦 Config backed up to: C:\Users\Cameron\Desktop\TradingBot\backups\config\2026.02.16_16.08.26
+2026-02-16 16:08:26,246 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [WATCHLIST] ✅ Policy applied (ADD). Added=[] Removed=['AAVE/USD', 'AVAX/USD', 'BAT/USD', 'BCH/USD', 'BTC/USD', 'CRV/USD', 'DOGE/USD', 'DOT/USD', 'ETH/USD', 'GRT/USD', 'LINK/USD', 'LTC/USD', 'PEPE/USD', 'SHIB/USD', 'SKY/USD', 'SOL/USD', 'SUSHI/USD', 'TRUMP/USD', 'UNI/USD', 'USDC/USD', 'USDG/USD', 'USDT/USD', 'XRP/USD', 'XTZ/USD', 'YFI/USD']
+2026-02-16 16:08:26,246 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧭 [WATCHLIST] Policy applied (None): +0 -25 (batch 2026.02.16_22.08.26)
+2026-02-16 16:10:48,115 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.16_16.10.48_paper.json

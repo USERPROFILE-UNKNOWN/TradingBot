@@ -22,6 +22,7 @@ import customtkinter as ctk
 from tkinter import ttk, messagebox
 
 from ..config_io import write_configuration_only
+from ..config_validate import validate_runtime_config
 
 
 def _as_bool(value: object, default: bool = False) -> bool:
@@ -295,6 +296,46 @@ class ConfigTab:
             self._set_status("No changes.")
             return
 
+        # Validate before writing to disk (strict, no silent fallback)
+        repv = validate_runtime_config(
+            self.config, strict=True, require_credentials=False, include_credentials=False
+        )
+        if getattr(repv, 'warnings', None):
+            for w in repv.warnings:
+                try:
+                    self._log(f"[CONFIG_VALIDATE] ⚠️ {w}")
+                except Exception:
+                    pass
+
+        if repv.errors:
+            # Revert in-memory values and UI fields
+            for k, old_val, _new_val in changed:
+                try:
+                    self.config.set("CONFIGURATION", k, old_val)
+                except Exception:
+                    try:
+                        self.config["CONFIGURATION"][k] = old_val
+                    except Exception:
+                        pass
+
+            for k, old_val, _new_val in changed:
+                ent = self._entries.get(k)
+                if ent is None:
+                    continue
+                try:
+                    ent.delete(0, "end")
+                    ent.insert(0, old_val)
+                except Exception:
+                    pass
+
+            err_lines = '\n'.join([f"- {e}" for e in repv.errors])
+            messagebox.showerror(
+                "Config Validation Failed",
+                "The config contains invalid values and was not saved.\n\nErrors:\n" + err_lines,
+            )
+            self._set_status("Validation failed; no changes saved.")
+            return
+
         bdir = self._backup_config_ini()
         if bdir:
             self._log(f"[CONFIG] ✅ Backed up config.ini to: {bdir}")
@@ -357,144 +398,3 @@ class ConfigTab:
             pass
 
 
-    # ---------------- Agent Shadow Mode -----------------
-
-    def refresh_agent(self):
-        try:
-            rows = self.db.get_agent_suggestions(limit=250)
-        except Exception as e:
-            messagebox.showerror("Agent", f"Failed to load suggestions: {e}")
-            return
-
-        for iid in self.agent_tree.get_children():
-            self.agent_tree.delete(iid)
-
-        for (sid, created_at, title, suggestion_type, status, artifact_type, artifact_path) in rows:
-            self.agent_tree.insert("", "end", iid=str(sid), values=(sid, created_at, title, suggestion_type, status))
-
-        self.agent_details.delete("1.0", "end")
-
-    def _on_agent_select(self, _event=None):
-        sel = self.agent_tree.selection()
-        if not sel:
-            return
-        sid = int(sel[0])
-        detail = self.db.get_agent_suggestion_detail(sid)
-        if not detail:
-            return
-        (row, rats) = detail
-        (sid, created_at, title, suggestion_type, status, artifact_type, artifact_path, suggestion_json, applied_at, applied_by) = row
-
-        try:
-            payload = json.loads(suggestion_json or "{}")
-        except Exception:
-            payload = {}
-
-        lines = []
-        lines.append(f"ID: {sid}")
-        lines.append(f"Created: {created_at}")
-        lines.append(f"Status: {status}")
-        if applied_at:
-            lines.append(f"Applied At: {applied_at} ({applied_by or ''})")
-        lines.append(f"Type: {suggestion_type}")
-        lines.append(f"Artifact: {artifact_type} | {artifact_path}")
-        lines.append("")
-        lines.append(title)
-        lines.append("")
-
-        if isinstance(payload, dict) and payload.get("config_changes"):
-            lines.append("Proposed config changes:")
-            for k, v in payload.get("config_changes", {}).items():
-                lines.append(f"  - {k} = {v}")
-            lines.append("")
-
-        if rats:
-            lines.append("Rationales:")
-            for (r_created, rationale, metrics_json) in rats:
-                lines.append(f"[{r_created}] {rationale}")
-                try:
-                    mj = json.loads(metrics_json or "{}")
-                    if mj:
-                        lines.append(f"  metrics: {mj}")
-                except Exception:
-                    pass
-            lines.append("")
-
-        self.agent_details.delete("1.0", "end")
-        self.agent_details.insert("end", "\n".join(lines))
-
-    def _get_selected_agent_id(self):
-        sel = self.agent_tree.selection()
-        if not sel:
-            return None
-        try:
-            return int(sel[0])
-        except Exception:
-            return None
-
-    def apply_selected_agent(self):
-        sid = self._get_selected_agent_id()
-        if sid is None:
-            return
-
-        detail = self.db.get_agent_suggestion_detail(sid)
-        if not detail:
-            return
-        row, _rats = detail
-        suggestion_json = row[7]
-        suggestion_type = row[3]
-
-        if suggestion_type != "config_change":
-            messagebox.showinfo("Agent", "This suggestion is not a config change.")
-            return
-
-        try:
-            payload = json.loads(suggestion_json or "{}")
-        except Exception:
-            payload = {}
-
-        changes = payload.get("config_changes") or {}
-        if not changes:
-            messagebox.showinfo("Agent", "No config changes provided in this suggestion.")
-            return
-
-        if not messagebox.askyesno("Apply Agent Suggestion", "Apply selected config change(s) now?\n\nThis does NOT place trades."):
-            return
-
-        try:
-            for key, val in changes.items():
-                if "CONFIGURATION" not in self.config:
-                    self.config["CONFIGURATION"] = {}
-                old_val = self.config["CONFIGURATION"].get(key)
-                self.config["CONFIGURATION"][key] = str(val)
-                # Log change
-                try:
-                    self.db.log_config_change(key, str(old_val), str(val), source="agent")
-                except Exception:
-                    pass
-
-            # Persist
-            write_configuration_only(self.config, "Agent suggestion applied", paths=self.paths)
-
-            # Update UI entries
-            for key, val in changes.items():
-                if key in self.entries:
-                    self.entries[key].delete(0, "end")
-                    self.entries[key].insert(0, str(val))
-
-            self.db.set_agent_suggestion_status(sid, "APPLIED", applied_by="config_tab")
-            self.refresh_agent()
-            self.refresh_history()
-            messagebox.showinfo("Agent", "Suggestion applied. (Manual approval recorded)")
-        except Exception as e:
-            messagebox.showerror("Agent", f"Failed to apply suggestion: {e}")
-
-    def ignore_selected_agent(self):
-        sid = self._get_selected_agent_id()
-        if sid is None:
-            return
-        try:
-            self.db.set_agent_suggestion_status(sid, "IGNORED", applied_by="config_tab")
-            self.refresh_agent()
-        except Exception as e:
-            messagebox.showerror("Agent", f"Failed to ignore: {e}")

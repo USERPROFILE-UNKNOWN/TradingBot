@@ -22,6 +22,8 @@ class _ContextDefaultsFilter(logging.Filter):
             record.order_id = "-"
         if not hasattr(record, "strategy"):
             record.strategy = "-"
+        if not hasattr(record, "mode"):
+            record.mode = "-"
         return True
 
 
@@ -50,7 +52,7 @@ def configure_logging(log_dir: Optional[str] = None, level: int = logging.INFO) 
         level=level,
         format=(
             "%(asctime)s | %(levelname)s | %(name)s | "
-            "component=%(component)s symbol=%(symbol)s order_id=%(order_id)s strategy=%(strategy)s | "
+            "component=%(component)s mode=%(mode)s symbol=%(symbol)s order_id=%(order_id)s strategy=%(strategy)s | "
             "%(message)s"
         ),
         handlers=handlers,

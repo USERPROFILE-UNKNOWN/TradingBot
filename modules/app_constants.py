@@ -1,7 +1,9 @@
-"""Application constants.
+"""Application-wide constants.
 
-Centralized version + release identifiers consumed by UI, logs, and the engine.
+Keep this file as the single source of truth for the current release version.
 """
 
-APP_VERSION = "v5.14.0"
-APP_RELEASE = "Phase 4 — Watchlist API Orchestrator Queue"
+APP_NAME = "TradingBot"
+APP_VERSION = "v5.16.2"
+APP_RELEASE = "Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync)"
+

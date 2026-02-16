@@ -1,0 +1,8 @@
+2026-02-16 16:08:03 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 16:08:03 | [SYSTEM] ℹ️ API not configured (set Alpaca keys in config/keys.ini)
+2026-02-16 16:08:04 | 🧠 [AI] Not enough data to train.
+2026-02-16 16:08:26 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 16:08:26 | 📦 Config backed up to: C:\Users\Cameron\Desktop\TradingBot\backups\config\2026.02.16_16.08.26
+2026-02-16 16:08:26 | [WATCHLIST] ✅ Policy applied (ADD). Added=[] Removed=['AAVE/USD', 'AVAX/USD', 'BAT/USD', 'BCH/USD', 'BTC/USD', 'CRV/USD', 'DOGE/USD', 'DOT/USD', 'ETH/USD', 'GRT/USD', 'LINK/USD', 'LTC/USD', 'PEPE/USD', 'SHIB/USD', 'SKY/USD', 'SOL/USD', 'SUSHI/USD', 'TRUMP/USD', 'UNI/USD', 'USDC/USD', 'USDG/USD', 'USDT/USD', 'XRP/USD', 'XTZ/USD', 'YFI/USD']
+2026-02-16 16:08:26 | 🧭 [WATCHLIST] Policy applied (None): +0 -25 (batch 2026.02.16_22.08.26)
+2026-02-16 16:10:48 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_16.10.48_paper.json

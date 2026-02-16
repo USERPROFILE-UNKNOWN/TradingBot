@@ -55,4 +55,4 @@ def test_datamanager_log_uses_module_logger_when_no_callback():
 
     dm._log("db warning", strategy="MOMO")
 
-    assert logger.calls == [("db warning", {"component": "db", "strategy": "MOMO"})]
+    assert logger.calls == [("db warning", {"component": "db", "mode": "OFF", "strategy": "MOMO"})]

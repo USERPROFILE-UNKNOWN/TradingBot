@@ -1,8 +1,9 @@
 import os
+import logging
 
 from modules.config_validate import validate_runtime_config
 from modules.database import DataManager
-from modules.logging_utils import configure_logging, get_component_logger
+from modules.logging_utils import configure_logging, get_logger
 from modules.startup_paths import resolve_db_placeholder_path
 from modules.ui import TradingApp
 from modules.utils import (
@@ -13,11 +14,6 @@ from modules.utils import (
 )
 
 
-def _resolve_db_placeholder_path(paths, config) -> str:
-    """Backward-compatible wrapper for startup db placeholder resolution."""
-    return resolve_db_placeholder_path(paths, config)
-
-
 def _is_strict_validation_enabled(config) -> bool:
     try:
         raw = config.get("CONFIGURATION", "strict_config_validation", fallback="False")
@@ -26,23 +22,52 @@ def _is_strict_validation_enabled(config) -> bool:
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _read_agent_mode(config) -> str:
+    try:
+        raw = config.get("CONFIGURATION", "agent_mode", fallback="OFF")
+    except Exception:
+        raw = "OFF"
+    return str(raw or "OFF").strip().upper() or "OFF"
+
+
 def main():
     # 1) Setup Paths
     paths = get_paths()
+    try:
+        os.makedirs(paths["logs"], exist_ok=True)
+    except Exception:
+        pass
+    try:
+        os.makedirs(paths["backup"], exist_ok=True)
+    except Exception:
+        pass
+
     configure_logging(paths.get("logs"))
-    log = get_component_logger(__name__, "startup")
-    os.makedirs(paths["logs"], exist_ok=True)
-    os.makedirs(paths["backup"], exist_ok=True)
+    log = logging.LoggerAdapter(get_logger(__name__), {"component": "startup", "mode": "-"})
 
     # 2) Ensure split config layout (forward-only; creates missing split INIs)
-    ensure_split_config_layout(paths)
+    try:
+        ensure_split_config_layout(paths)
+    except Exception:
+        log.exception("[E_STARTUP_CONFIG_LAYOUT_FAIL] Failed to ensure split config layout")
+        raise
 
     # 3) Load merged runtime config
-    config = load_split_config(paths)
+    try:
+        config = load_split_config(paths)
+    except Exception:
+        log.exception("[E_STARTUP_CONFIG_LOAD_FAIL] Failed to load split config")
+        raise
+
+    # Update mode context once config is available
+    try:
+        log.extra["mode"] = _read_agent_mode(config)
+    except Exception:
+        pass
 
     # 3.1) Validate runtime config (strict mode optional)
     strict_mode = _is_strict_validation_enabled(config)
-    repv = validate_runtime_config(config, require_credentials=strict_mode)
+    repv = validate_runtime_config(config, strict=strict_mode, require_credentials=strict_mode)
     for warning in repv.warnings:
         log.warning("[CONFIG] %s", warning)
 
@@ -50,6 +75,7 @@ def main():
         for err in repv.errors:
             log.error("[CONFIG] %s", err)
         if strict_mode:
+            log.error("[E_CFG_STRICT_VALIDATION_FAILED] Configuration validation failed in strict mode")
             raise RuntimeError("Configuration validation failed in strict mode")
 
     # Config sanitizer warning (only if repairs were needed)
@@ -69,17 +95,30 @@ def main():
                 ) as lf:
                     lf.write(msg + "\n")
             except Exception:
-                log.exception("[CONFIG] Failed writing config_sanitizer.log")
+                log.exception("[E_STARTUP_SANITIZER_WRITE_FAIL] Failed writing config_sanitizer.log")
     except Exception:
-        log.exception("[CONFIG] Failed to read sanitizer report")
+        log.exception("[E_STARTUP_SANITIZER_READ_FAIL] Failed to read sanitizer report")
 
     # 4) Resolve + init Database
-    db_path = _resolve_db_placeholder_path(paths, config)
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    db_manager = DataManager(db_path, config=config, paths=paths)
+    db_path = resolve_db_placeholder_path(paths, config)
+    try:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    except Exception:
+        pass
+
+    try:
+        db_manager = DataManager(db_path, config=config, paths=paths)
+    except Exception:
+        log.exception("[E_DB_INIT_FAIL] DataManager initialization failed")
+        raise
 
     # 5) Launch GUI
-    app = TradingApp(config, db_manager)
+    try:
+        app = TradingApp(config, db_manager)
+    except Exception:
+        log.exception("[E_UI_INIT_FAIL] TradingApp initialization failed")
+        raise
+
     app.mainloop()
 
 

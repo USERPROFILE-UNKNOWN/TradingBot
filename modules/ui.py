@@ -5,6 +5,7 @@ import sys
 import subprocess
 import os
 import time
+import logging
 import shutil
 import numpy as np 
 from tkinter import messagebox, ttk
@@ -13,6 +14,8 @@ from .engine import TradingEngine
 from .agent_master import AgentMaster
 from .backfill import BackfillEngine
 from .utils import get_paths, write_split_config, ensure_split_config_layout, APP_VERSION, APP_RELEASE
+from .logging_utils import get_logger
+from .config_validate import validate_runtime_config
 
 # Refactored Components
 from .popups import StrategyEditor, DecisionViewer, BacktestOrchestrator
@@ -35,6 +38,9 @@ class TradingApp(ctk.CTk):
         self.config = config
         self.db_manager = db_manager
         self.paths = get_paths()
+
+        # Unified structured logging (file/stdout)
+        self._py_logger = get_logger(__name__)
 
         # Release E2: Live Log buffering + file-backed runtime log
         self._log_max_lines = 2000
@@ -886,22 +892,121 @@ class TradingApp(ctk.CTk):
         ctk.CTkButton(a_frame, text="Factory Reset", fg_color="#D32F2F", command=self.factory_reset).pack(side="left", padx=10, pady=10)
 
     # --- HELPERS ---
+
     def save_global_settings(self):
+        """Save global settings from the Settings tab.
+
+        Save-gate: validate before writing to disk. This is intentionally strict
+        on type/range checks even when strict_config_validation is OFF.
+        """
         try:
-            self.backup_config()
-            self.config['CONFIGURATION']['amount_to_trade'] = self.ent_cap.get()
-            self.config['CONFIGURATION']['max_percent_per_stock'] = self.ent_pct.get()
-            self.config['CONFIGURATION']['max_daily_loss'] = self.ent_kill.get()
-            self.config['CONFIGURATION']['compounding_enabled'] = str(bool(self.sw_comp.get()))
-            self.config['CONFIGURATION']['ai_sizing_enabled'] = str(bool(self.sw_ai.get()))
-            self.config['CONFIGURATION']['agent_mode'] = str(self.opt_agent_mode.get()).upper()
+            # Snapshot for revert if validation fails
+            old = {}
+
+            def _snap(sec: str, key: str):
+                try:
+                    old[(sec, key)] = self.config.get(sec, key, fallback=None)
+                except Exception:
+                    try:
+                        old[(sec, key)] = self.config[sec].get(key)
+                    except Exception:
+                        old[(sec, key)] = None
+
+            # Compute update interval
             spd = self.opt_speed.get()
             val = '30' if "Fast" in spd else '300' if "Slow" in spd else '60'
-            self.config['CONFIGURATION']['update_interval_sec'] = val
-            self.config['KEYS']['alpaca_key'] = self.ent_key.get()
-            self.config['KEYS']['alpaca_secret'] = self.ent_sec.get()
-            self.config['KEYS']['telegram_token'] = self.ent_tel.get()
-            self.config['KEYS']['telegram_enabled'] = str(bool(self.sw_tel.get()))
+
+            keys_to_set = [
+                ("CONFIGURATION", "amount_to_trade", self.ent_cap.get()),
+                ("CONFIGURATION", "max_percent_per_stock", self.ent_pct.get()),
+                ("CONFIGURATION", "max_daily_loss", self.ent_kill.get()),
+                ("CONFIGURATION", "compounding_enabled", str(bool(self.sw_comp.get()))),
+                ("CONFIGURATION", "ai_sizing_enabled", str(bool(self.sw_ai.get()))),
+                ("CONFIGURATION", "agent_mode", str(self.opt_agent_mode.get()).upper()),
+                ("CONFIGURATION", "update_interval_sec", val),
+                ("KEYS", "alpaca_key", self.ent_key.get()),
+                ("KEYS", "alpaca_secret", self.ent_sec.get()),
+                ("KEYS", "telegram_token", self.ent_tel.get()),
+                ("KEYS", "telegram_enabled", str(bool(self.sw_tel.get()))),
+            ]
+
+            for sec, key, _v in keys_to_set:
+                _snap(sec, key)
+
+            # Backup current on-disk config prior to mutation
+            try:
+                self.backup_config()
+            except Exception:
+                pass
+
+            # Apply changes to in-memory config
+            for sec, key, v in keys_to_set:
+                try:
+                    if not self.config.has_section(sec):
+                        self.config.add_section(sec)
+                except Exception:
+                    pass
+                try:
+                    self.config[sec][key] = str(v)
+                except Exception:
+                    try:
+                        self.config.set(sec, key, str(v))
+                    except Exception:
+                        pass
+
+            # If strict validation is enabled, require broker creds at save-time.
+            strict_startup = False
+            try:
+                strict_startup = str(self.config["CONFIGURATION"].get("strict_config_validation", "False")).strip().lower() in (
+                    "1", "true", "yes", "y", "on"
+                )
+            except Exception:
+                strict_startup = False
+
+            repv = validate_runtime_config(
+                self.config,
+                strict=True,
+                require_credentials=strict_startup,
+                include_credentials=True,
+            )
+
+            if repv.errors:
+                # Revert in-memory config to previous values
+                for (sec, key), prev in old.items():
+                    try:
+                        if prev is None:
+                            try:
+                                if self.config.has_option(sec, key):
+                                    self.config.remove_option(sec, key)
+                            except Exception:
+                                pass
+                        else:
+                            self.config[sec][key] = str(prev)
+                    except Exception:
+                        pass
+
+                err_lines = "\n".join([f"- {e}" for e in repv.errors])
+                try:
+                    messagebox.showerror(
+                        "Settings Validation Failed",
+                        "Settings were not saved. Fix the errors and try again.\n\nErrors:\n" + err_lines,
+                    )
+                except Exception:
+                    pass
+                try:
+                    self.log(f"❌ Settings not saved: validation failed ({len(repv.errors)} error(s)).")
+                except Exception:
+                    pass
+                return
+
+            # Log warnings (non-blocking)
+            if getattr(repv, "warnings", None):
+                for w in repv.warnings:
+                    try:
+                        self.log(f"⚠️ {w}")
+                    except Exception:
+                        pass
+
             self.write_config()
             self.engine.reload_strategies()
             if self.agent_master:
@@ -909,6 +1014,7 @@ class TradingApp(ctk.CTk):
             self.log("✅ Global Settings Saved & Reloaded.")
         except Exception as e:
             self.log(f"❌ Save Failed: {e}")
+
 
     def open_logs(self): 
         subprocess.Popen(f'explorer "{self.paths["logs"]}"')
@@ -1386,7 +1492,7 @@ class TradingApp(ctk.CTk):
         self.tree_left.delete(*self.tree_left.get_children())
         self.tree_right.delete(*self.tree_right.get_children())
         
-        if df.empty: return
+        if df is None or df.empty: return
 
         # Dynamic Columns with Sorting Bindings
         cols = list(df.columns)
@@ -1604,14 +1710,74 @@ class TradingApp(ctk.CTk):
         except Exception:
             pass
 
-    def log(self, msg, level="INFO", category=None, symbol=None, order_id=None, strategy=None):
+    def log(
+        self,
+        msg,
+        level="INFO",
+        category=None,
+        symbol=None,
+        order_id=None,
+        strategy=None,
+        component=None,
+        mode=None,
+        **context,
+    ):
+        """UI log sink + unified structured logging.
+
+        This method is intentionally permissive in accepted kwargs so engine/DB
+        can pass structured context without breaking the UI callback signature.
+        """
+
+        # Merge structured context
+        try:
+            if component is None:
+                component = context.get("component")
+            if mode is None:
+                mode = context.get("mode")
+            if symbol is None:
+                symbol = context.get("symbol")
+            if order_id is None:
+                order_id = context.get("order_id")
+            if strategy is None:
+                strategy = context.get("strategy")
+        except Exception:
+            pass
+
+        if not component:
+            component = "ui"
+
+        if not mode:
+            # Best-effort: pull from AgentMaster first, then config
+            try:
+                am = getattr(self, "agent_master", None)
+                if am is not None:
+                    am_mode = getattr(am, "mode", None)
+                    if am_mode:
+                        mode = str(am_mode).strip().upper()
+            except Exception:
+                pass
+            if not mode:
+                try:
+                    # configparser-like
+                    if hasattr(self.config, "get"):
+                        mode = str(self.config.get("CONFIGURATION", "agent_mode", fallback="OFF")).strip().upper()
+                    else:
+                        # dict-like
+                        mode = str(self.config.get("CONFIGURATION", {}).get("agent_mode", "OFF")).strip().upper()
+                except Exception:
+                    mode = "OFF"
+
+        # Build a readable prefix for the live log
         parts = []
         try:
             lvl = str(level or "INFO").upper()
+            if lvl == "WARN":
+                lvl = "WARNING"
             if lvl and lvl != "INFO":
                 parts.append(lvl)
         except Exception:
             pass
+
         if category:
             parts.append(str(category).upper())
         if symbol:
@@ -1623,6 +1789,23 @@ class TradingApp(ctk.CTk):
 
         prefix = " ".join([f"[{p}]" for p in parts])
         final_msg = f"{prefix} {msg}".strip() if prefix else str(msg)
+
+        # Unified structured logging (file/stdout)
+        try:
+            lvl_txt = str(level or "INFO").upper()
+            if lvl_txt == "WARN":
+                lvl_txt = "WARNING"
+            lvl_no = getattr(logging, lvl_txt, logging.INFO)
+            extra = {
+                "component": str(component),
+                "mode": str(mode),
+                "symbol": str(symbol).upper() if symbol else "-",
+                "order_id": str(order_id) if order_id else "-",
+                "strategy": str(strategy) if strategy else "-",
+            }
+            self._py_logger.log(lvl_no, str(msg), extra=extra)
+        except Exception:
+            pass
 
         # Release E2: always queue file-backed log first (thread-safe)
         try:
