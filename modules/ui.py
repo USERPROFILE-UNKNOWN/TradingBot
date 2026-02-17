@@ -235,7 +235,7 @@ class TradingApp(ctk.CTk):
             pass
 
         # 5. Logic
-        self.dashboard_logic = DashboardTab(self.tab_chart, self.engine, self.db_manager, self.config)
+        self.dashboard_logic = DashboardTab(self.tab_chart, self.engine, self.db_manager, self.config, metrics_store=getattr(self.agent_master, "metrics", None))
         self.inspector_logic = InspectorTab(self.tab_inspect, self.engine, self.db_manager, self.config)
         self.config_logic = ConfigTab(self.tab_config, self.db_manager, self.config, self.paths, self.log)
         self.architect_logic = ArchitectTab(self.tab_architect, self.db_manager, self.config)

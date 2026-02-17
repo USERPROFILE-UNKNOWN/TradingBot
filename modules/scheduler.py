@@ -8,8 +8,9 @@ from typing import Callable, Dict
 
 
 class JobScheduler:
-    def __init__(self, log_callback=None):
+    def __init__(self, log_callback=None, metrics_store=None):
         self.log = log_callback or (lambda *_args, **_kwargs: None)
+        self.metrics = metrics_store
         self._jobs: Dict[str, dict] = {}
         self._stop = threading.Event()
         self._thread = None
@@ -39,13 +40,24 @@ class JobScheduler:
             for name, job in list(self._jobs.items()):
                 if now < float(job.get("next_run", now + 9999)):
                     continue
+                started = time.time()
+                status = "ok"
+                err = ""
                 try:
                     job["func"]()
                 except Exception as e:
+                    status = "error"
+                    err = str(e)
                     try:
                         self.log(f"[SCHEDULER] Job failed ({name}): {e}")
                     except Exception:
                         pass
                 finally:
+                    dur_ms = int((time.time() - started) * 1000)
+                    try:
+                        if self.metrics is not None:
+                            self.metrics.log_job_run(name, status, dur_ms, {"error": err} if err else {})
+                    except Exception:
+                        pass
                     job["next_run"] = time.time() + int(job.get("interval", 60))
             time.sleep(1)

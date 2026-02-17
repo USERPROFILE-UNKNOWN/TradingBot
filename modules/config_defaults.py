@@ -1,4 +1,4 @@
-"""Canonical split-config defaults (v5.16.2).
+"""Canonical split-config defaults (v5.17.0).
 
 This module is the single source of truth for default values used to:
 - Create missing config/*.ini files (fresh install)

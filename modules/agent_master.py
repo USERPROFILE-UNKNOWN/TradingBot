@@ -30,10 +30,9 @@ class AgentMaster:
         self.mode = self._read_mode()
         self.bus = EventBus()
         self.gov = Governance(config)
-        self.scheduler = JobScheduler(log_callback=self.log)
-
         db_dir = getattr(db_manager, "db_dir", None) or os.path.join(os.getcwd(), "db")
         self.metrics = MetricsStore(db_dir)
+        self.scheduler = JobScheduler(log_callback=self.log, metrics_store=self.metrics)
 
         # TradingView alert autovalidation (PAPER-only; gated internally)
         def _tv_autoval_log(msg: str) -> None:
@@ -131,6 +130,52 @@ class AgentMaster:
         elif self.mode == "PAPER":
             score = 0.85
         self.metrics.log_metric("system_health_score", score, {"mode": self.mode})
+
+        # v5.17.0: persist basic symbol/system health snapshot for dashboard widget.
+        try:
+            stale_threshold = float(self.config.get("CONFIGURATION", "stale_bar_seconds_threshold", fallback="180"))
+        except Exception:
+            stale_threshold = 180.0
+
+        api_err = 0
+        rejects = 0
+        total_orders = 0
+        try:
+            eng = getattr(self.db, "engine", None)
+            api_err = int(len(getattr(eng, "_e5_api_error_events", []) or [])) if eng is not None else 0
+            rejects = int(len(getattr(eng, "_e5_reject_events", []) or [])) if eng is not None else 0
+            total_orders = int(len(getattr(eng, "pending_confirmations", {}) or {})) + rejects
+        except Exception:
+            api_err, rejects, total_orders = 0, 0, 0
+
+        freshness = None
+        try:
+            syms = []
+            get_syms = getattr(self.db, "get_distinct_symbols", None)
+            if callable(get_syms):
+                syms = list(get_syms() or [])[:25]
+            ages = []
+            for sym in syms:
+                ts = self.db.get_last_timestamp(sym)
+                if ts is None:
+                    continue
+                age = (datetime.now(timezone.utc) - ts).total_seconds()
+                ages.append(float(age))
+            if ages:
+                freshness = max(ages)
+        except Exception:
+            freshness = None
+
+        reject_ratio = (float(rejects) / float(total_orders)) if total_orders > 0 else 0.0
+        self.metrics.log_symbol_health(
+            "SYSTEM",
+            freshness_seconds=freshness,
+            api_error_streak=api_err,
+            reject_ratio=reject_ratio,
+            decision_exec_latency_ms=None,
+            slippage_bps=None,
+            details={"mode": self.mode, "stale_threshold": stale_threshold},
+        )
 
     def _read_mode(self):
         try:
@@ -402,6 +447,7 @@ class AgentMaster:
 
         if ev_type in {"ORDER_REJECTED", "RISK_BREACH", "DATA_GAP"}:
             self.metrics.log_metric("anomaly_count", 1.0, {"event_type": ev_type, **payload})
+            self.metrics.log_anomaly(ev_type, severity="WARN", source="event_bus", details=payload)
             if self.mode in {"PAPER", "LIVE"}:
                 self.log(f"🧠 [AGENT] Detected {ev_type}; tightening guardrails.")
 

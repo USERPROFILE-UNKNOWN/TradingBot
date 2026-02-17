@@ -1,7 +1,8 @@
 """Metrics and audit persistence (metrics.db).
 
-Phase 1.5 additions:
-- tradingview_alerts table for durable TradingView webhook ingestion.
+v5.17.0 additions:
+- job_runs / anomalies / symbol_health tables
+- health snapshot query helper for Dashboard widget
 """
 
 from __future__ import annotations
@@ -55,6 +56,51 @@ class MetricsStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS job_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts INTEGER NOT NULL,
+                    job_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    duration_ms INTEGER,
+                    details_json TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_job_runs_ts ON job_runs(ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_job_runs_name ON job_runs(job_name)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS anomalies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    source TEXT,
+                    details_json TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_ts ON anomalies(ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_type ON anomalies(event_type)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS symbol_health (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts INTEGER NOT NULL,
+                    symbol TEXT NOT NULL,
+                    freshness_seconds REAL,
+                    api_error_streak INTEGER,
+                    reject_ratio REAL,
+                    decision_exec_latency_ms REAL,
+                    slippage_bps REAL,
+                    details_json TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_health_ts ON symbol_health(ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_health_symbol ON symbol_health(symbol)")
 
             # Phase 1.5: TradingView alert ingestion
             conn.execute(
@@ -114,6 +160,98 @@ class MetricsStore:
                 (int(time.time()), str(mode), str(action_type), 1 if approved else 0, str(reason), json.dumps(payload or {})),
             )
             conn.commit()
+
+    def log_job_run(
+        self,
+        job_name: str,
+        status: str,
+        duration_ms: int | None = None,
+        details: dict | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO job_runs(ts, job_name, status, duration_ms, details_json) VALUES (?, ?, ?, ?, ?)",
+                (
+                    int(time.time()),
+                    str(job_name),
+                    str(status),
+                    (int(duration_ms) if duration_ms is not None else None),
+                    json.dumps(details or {}),
+                ),
+            )
+            conn.commit()
+
+    def log_anomaly(
+        self,
+        event_type: str,
+        severity: str = "WARN",
+        source: str = "agent_master",
+        details: dict | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO anomalies(ts, event_type, severity, source, details_json) VALUES (?, ?, ?, ?, ?)",
+                (int(time.time()), str(event_type), str(severity), str(source), json.dumps(details or {})),
+            )
+            conn.commit()
+
+    def log_symbol_health(
+        self,
+        symbol: str,
+        *,
+        freshness_seconds: float | None = None,
+        api_error_streak: int | None = None,
+        reject_ratio: float | None = None,
+        decision_exec_latency_ms: float | None = None,
+        slippage_bps: float | None = None,
+        details: dict | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO symbol_health(
+                    ts, symbol, freshness_seconds, api_error_streak, reject_ratio,
+                    decision_exec_latency_ms, slippage_bps, details_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(time.time()),
+                    str(symbol).upper(),
+                    (float(freshness_seconds) if freshness_seconds is not None else None),
+                    (int(api_error_streak) if api_error_streak is not None else None),
+                    (float(reject_ratio) if reject_ratio is not None else None),
+                    (float(decision_exec_latency_ms) if decision_exec_latency_ms is not None else None),
+                    (float(slippage_bps) if slippage_bps is not None else None),
+                    json.dumps(details or {}),
+                ),
+            )
+            conn.commit()
+
+    def get_health_widget_snapshot(self, lookback_sec: int = 3600) -> Dict[str, Any]:
+        out: Dict[str, Any] = {
+            "data_freshness_seconds": None,
+            "api_error_streak": 0,
+            "order_reject_ratio": 0.0,
+            "decision_exec_latency_ms": None,
+            "slippage_bps": None,
+            "anomaly_count": 0,
+        }
+        since_ts = int(time.time()) - max(60, int(lookback_sec))
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT freshness_seconds, api_error_streak, reject_ratio, decision_exec_latency_ms, slippage_bps "
+                "FROM symbol_health WHERE ts >= ? ORDER BY id DESC LIMIT 1",
+                (since_ts,),
+            ).fetchone()
+            if row:
+                out["data_freshness_seconds"] = row[0]
+                out["api_error_streak"] = int(row[1] or 0)
+                out["order_reject_ratio"] = float(row[2] or 0.0)
+                out["decision_exec_latency_ms"] = row[3]
+                out["slippage_bps"] = row[4]
+            arow = conn.execute("SELECT COUNT(1) FROM anomalies WHERE ts >= ?", (since_ts,)).fetchone()
+            out["anomaly_count"] = int((arow or [0])[0] or 0)
+        return out
 
     def log_tradingview_alert(
         self,

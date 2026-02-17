@@ -4,6 +4,11 @@ import traceback
 
 print(f"python version: {sys.version}")
 print(f"working dir: {os.getcwd()}")
+try:
+    from modules.app_constants import APP_VERSION
+    print(f"app version: {APP_VERSION}")
+except Exception:
+    pass
 
 print("\n--- STEP 1: CHECKING DEPENDENCIES ---")
 libs = ['pandas', 'numpy', 'customtkinter', 'alpaca_trade_api', 'vaderSentiment', 'sklearn', 'scipy']
