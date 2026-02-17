@@ -452,6 +452,14 @@ class TradingEngine:
             self.api = self.broker
 
             acct = self.api.retry_api_call(self.api.get_account)
+            if not acct and hasattr(self.api, "try_switch_environment"):
+                switched = False
+                try:
+                    switched = bool(self.api.try_switch_environment())
+                except Exception:
+                    switched = False
+                if switched:
+                    acct = self.api.retry_api_call(self.api.get_account)
             if acct:
                 self.start_equity = float(getattr(acct, 'last_equity', 0.0))
                 self.current_equity = float(getattr(acct, 'equity', 0.0))

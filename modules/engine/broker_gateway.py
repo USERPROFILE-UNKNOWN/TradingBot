@@ -31,6 +31,8 @@ class BrokerGateway:
 
         self.base_url: str = ""
         self._api: Optional[tradeapi.REST] = None
+        self._env_credentials: dict[str, tuple[str, str, str]] = {}
+        self._active_env: str = ""
 
     def __bool__(self) -> bool:
         return self._api is not None
@@ -69,13 +71,42 @@ class BrokerGateway:
         if isinstance(paper, str):
             paper = paper.strip().lower() in {"1", "true", "yes", "y", "on"}
 
-        base_url = (keys.get("base_url") or "").strip()
-        self.base_url = base_url or (
-            "https://paper-api.alpaca.markets" if paper else "https://api.alpaca.markets"
-        )
+        preferred = "paper" if paper else "live"
+        self._env_credentials = {
+            "paper": (
+                (keys.get("paper_alpaca_key") or "").strip(),
+                (keys.get("paper_alpaca_secret") or "").strip(),
+                (keys.get("paper_base_url") or "").strip() or "https://paper-api.alpaca.markets",
+            ),
+            "live": (
+                (keys.get("live_alpaca_key") or "").strip(),
+                (keys.get("live_alpaca_secret") or "").strip(),
+                (keys.get("live_base_url") or "").strip() or "https://api.alpaca.markets",
+            ),
+        }
 
+        base_url = (keys.get("base_url") or "").strip()
         api_key = (keys.get("alpaca_key") or "").strip()
         api_secret = (keys.get("alpaca_secret") or "").strip()
+
+        if api_key and api_secret:
+            self.base_url = base_url or self._env_credentials[preferred][2]
+            self._active_env = preferred
+        else:
+            # Runtime config can be out of sync with keys.ini selection. Fall back to
+            # whichever scoped credentials are populated.
+            candidate_order = (preferred, "live" if preferred == "paper" else "paper")
+            resolved = None
+            for env in candidate_order:
+                k, s, u = self._env_credentials[env]
+                if k and s:
+                    resolved = (env, k, s, u)
+                    break
+            if resolved:
+                self._active_env, api_key, api_secret, self.base_url = resolved
+            else:
+                self.base_url = base_url or self._env_credentials[preferred][2]
+                self._active_env = preferred
         if not api_key or not api_secret:
             raise ValueError(
                 "Missing Alpaca API credentials (KEYS.alpaca_key / KEYS.alpaca_secret). Check config/keys.ini."
@@ -83,6 +114,19 @@ class BrokerGateway:
 
         self._api = tradeapi.REST(api_key, api_secret, self.base_url, api_version="v2")
         return self._api
+
+    def try_switch_environment(self) -> bool:
+        """Reconnect using the opposite scoped credentials if available."""
+        if not self._env_credentials:
+            return False
+        target = "live" if self._active_env == "paper" else "paper"
+        api_key, api_secret, base_url = self._env_credentials.get(target, ("", "", ""))
+        if not (api_key and api_secret):
+            return False
+        self._api = tradeapi.REST(api_key, api_secret, base_url, api_version="v2")
+        self.base_url = base_url
+        self._active_env = target
+        return True
 
     def retry_api_call(self, func: Callable[..., Any], *args: Any, retries: int = 3, delay: float = 2.0, **kwargs: Any):
         """Retry wrapper used by engine for network-ish Alpaca calls.

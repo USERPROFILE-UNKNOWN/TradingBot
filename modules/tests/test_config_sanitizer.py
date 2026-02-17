@@ -60,3 +60,39 @@ def test_load_split_config_repairs_merged_configuration_lines(tmp_path):
     assert "amount_to_trade=2000" in repaired.replace(" ", "")
     assert "max_positions=5" in repaired.replace(" ", "")
     assert "max_percent_per_stock=0.2" in repaired.replace(" ", "")
+
+
+def test_load_split_config_hydrates_optional_telegram_keys(tmp_path):
+    root = tmp_path / "TradingBot"
+    cfg_dir = root / "config"
+    cfg_dir.mkdir(parents=True)
+
+    (cfg_dir / "config.ini").write_text(
+        "[CONFIGURATION]\n"
+        "paper_trading=True\n",
+        encoding="utf-8",
+    )
+    (cfg_dir / "keys.ini").write_text(
+        "[KEYS]\n"
+        "alpaca_key=paper_key\n"
+        "alpaca_secret=paper_secret\n",
+        encoding="utf-8",
+    )
+    (cfg_dir / "watchlist.ini").write_text("[WATCHLIST_ACTIVE_STOCK]\n", encoding="utf-8")
+    (cfg_dir / "strategy.ini").write_text("[STRATEGY_THE_GENERAL]\n", encoding="utf-8")
+
+    paths = {
+        "configuration_ini": str(cfg_dir / "config.ini"),
+        "watchlist_ini": str(cfg_dir / "watchlist.ini"),
+        "strategy_ini": str(cfg_dir / "strategy.ini"),
+        "keys_ini": str(cfg_dir / "keys.ini"),
+    }
+
+    cfg = load_split_config(paths)
+
+    assert cfg.has_option("KEYS", "telegram_token")
+    assert cfg.get("KEYS", "telegram_token") == ""
+    assert cfg.has_option("KEYS", "telegram_chat_id")
+    assert cfg.get("KEYS", "telegram_chat_id") == ""
+    assert cfg.has_option("KEYS", "telegram_enabled")
+    assert cfg.get("KEYS", "telegram_enabled") == ""

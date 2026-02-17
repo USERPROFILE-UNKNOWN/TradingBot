@@ -498,8 +498,7 @@ def _apply_keys_to_cfg(cfg: configparser.ConfigParser, keys_map: dict, paper_tra
     ]
     for k in canonical:
         v = keys_map.get(k)
-        if v is not None and str(v).strip() != "":
-            cfg.set("KEYS", k, str(v).strip())
+        cfg.set("KEYS", k, str(v).strip() if v is not None else "")
 
     prefix = "paper" if paper_trading else "live"
 
