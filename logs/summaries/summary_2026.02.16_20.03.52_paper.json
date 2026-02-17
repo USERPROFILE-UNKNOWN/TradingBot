@@ -1,11 +1,11 @@
 {
   "engine": {
-    "version": "v5.16.2",
-    "release": "Phase 2.5 \u2014 Persistence hardening (repo-owned schema, deadlock fix, config defaults sync)",
-    "session_id": "2026.02.16_19.34.15",
-    "started_at": "2026-02-16 19:34:15.596559",
-    "ended_at": "2026-02-16 19:34:15.596587",
-    "duration_seconds": 2.8e-05,
+    "version": "v5.17.0",
+    "release": "Phase 3 \u2014 Observability + Ops readiness (metrics/SLO framework + health dashboard)",
+    "session_id": "2026.02.16_20.03.52",
+    "started_at": "2026-02-16 20:03:52.823215",
+    "ended_at": "2026-02-16 20:03:52.823259",
+    "duration_seconds": 4.4e-05,
     "stop_reason": null,
     "session_tag": "paper"
   },
@@ -60,7 +60,7 @@
   "promotion_status": {
     "enabled": true,
     "eligible": false,
-    "checked_sessions": 2,
+    "checked_sessions": 1,
     "window_days": 30,
     "requirements": {
       "min_sessions": 5,
@@ -81,7 +81,7 @@
       "worst_session_loss_pct": 0.0,
       "cancel_rate_pct": null,
       "reject_rate_pct": null,
-      "max_api_errors_per_hour": 12.0,
+      "max_api_errors_per_hour": 0.0,
       "stale_sessions_during_market_hours": 0,
       "watchdog_halt_sessions": 0,
       "crash_sessions": 0,

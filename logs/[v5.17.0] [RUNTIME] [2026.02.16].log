@@ -1,0 +1,6 @@
+2026-02-16 20:03:12 | --- START v5.17.0 | Phase 3 — Observability + Ops readiness (metrics/SLO framework + health dashboard) ---
+2026-02-16 20:03:33 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-16 20:03:33 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-16 20:03:33 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-16 20:03:33 | 🧠 [AI] Not enough data to train.
+2026-02-16 20:03:52 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_20.03.52_paper.json

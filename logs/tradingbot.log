@@ -1,15 +1,6 @@
-2026-02-16 19:22:41,056 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
-2026-02-16 19:22:41,860 | WARNING | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [E_ENGINE_API_RETRY] API call failed (attempt 1/3): unauthorized.
-2026-02-16 19:22:43,901 | WARNING | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [E_ENGINE_API_RETRY] API call failed (attempt 2/3): unauthorized.
-2026-02-16 19:22:45,976 | WARNING | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [E_ENGINE_API_RETRY] API call failed (attempt 3/3): unauthorized.
-2026-02-16 19:22:47,977 | ERROR | modules.engine.core_impl | component=app mode=- symbol=- order_id=- strategy=- | [E_ENGINE_API_RETRY_FAIL] API call failed after retries
-2026-02-16 19:22:47,977 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ❌ API authentication failed (account fetch unauthorized)
-2026-02-16 19:22:48,196 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
-2026-02-16 19:23:09,691 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
-2026-02-16 19:23:23,207 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.16_19.23.23_paper.json
-2026-02-16 19:28:28,749 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
-2026-02-16 19:28:28,945 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
-2026-02-16 19:28:29,397 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
-2026-02-16 19:28:29,529 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
-2026-02-16 19:28:50,912 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
-2026-02-16 19:34:15,604 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.16_19.34.15_paper.json
+2026-02-16 20:03:11,983 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
+2026-02-16 20:03:33,166 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-16 20:03:33,328 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
+2026-02-16 20:03:33,636 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
+2026-02-16 20:03:33,695 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
+2026-02-16 20:03:52,826 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.16_20.03.52_paper.json
