@@ -1,3 +1,9 @@
+[project]
+name = "tradingbot"
+version = "5.20.0"
+description = "TradingBot automated research + execution platform"
+requires-python = ">=3.12"
+
 [tool.pytest.ini_options]
 testpaths = ["modules/tests"]
 python_files = ["test_*.py"]

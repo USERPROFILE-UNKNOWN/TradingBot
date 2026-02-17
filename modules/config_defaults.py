@@ -1,4 +1,4 @@
-"""Canonical split-config defaults (v5.17.0).
+"""Canonical split-config defaults (v5.20.0).
 
 This module is the single source of truth for default values used to:
 - Create missing config/*.ini files (fresh install)
@@ -19,6 +19,31 @@ CONFIGURATION_DEFAULTS: Dict[str, str] = {
     "agent_live_max_exposure_pct": "0.30",
     "agent_max_live_changes_per_day": "8",
     "agent_mode": "OFF",
+    "agent_auto_backfill_enabled": "True",
+    "agent_backfill_min_interval_minutes": "240",
+    "agent_daily_report_enabled": "True",
+    "agent_daily_report_hour_utc": "0",
+    "agent_db_integrity_check_enabled": "True",
+    "agent_stale_quarantine_enabled": "True",
+    "agent_stale_quarantine_threshold_seconds": "21600",
+    "agent_research_automation_enabled": "True",
+    "agent_research_sweep_hour_utc": "1",
+    "agent_research_max_symbols": "10",
+    "agent_research_backtest_days": "14",
+    "agent_research_max_strategies": "6",
+    "agent_research_min_trades": "1",
+    "agent_canary_enabled": "True",
+    "agent_canary_exposure_pct": "0.10",
+    "agent_canary_reject_rate_pct_max": "10.0",
+    "agent_canary_slippage_bps_max": "25.0",
+    "agent_canary_drawdown_pct_max": "4.0",
+    "agent_canary_underperform_pct_max": "5.0",
+    "agent_canary_rollback_mode": "PAPER",
+    "agent_hard_halt_supreme": "True",
+    "agent_config_tuning_enabled": "True",
+    "agent_max_config_tunes_per_day": "2",
+    "agent_promotion_enabled": "True",
+    "agent_max_promotions_per_day": "1",
     "paper_trading": "True",
     "ai_calibration_frac": "0.2",
     "ai_calibration_fraction": "0.2",
