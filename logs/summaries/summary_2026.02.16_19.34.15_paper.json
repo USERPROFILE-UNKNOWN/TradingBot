@@ -1,0 +1,99 @@
+{
+  "engine": {
+    "version": "v5.16.2",
+    "release": "Phase 2.5 \u2014 Persistence hardening (repo-owned schema, deadlock fix, config defaults sync)",
+    "session_id": "2026.02.16_19.34.15",
+    "started_at": "2026-02-16 19:34:15.596559",
+    "ended_at": "2026-02-16 19:34:15.596587",
+    "duration_seconds": 2.8e-05,
+    "stop_reason": null,
+    "session_tag": "paper"
+  },
+  "equity": {
+    "start_equity": 2000.0,
+    "end_equity": 2000.0,
+    "pl_dollars": 0.0
+  },
+  "order_lifecycle": {
+    "submitted": 0,
+    "filled": 0,
+    "canceled": 0,
+    "rejected": 0,
+    "expired": 0,
+    "ttl_canceled": 0
+  },
+  "trades_session": {
+    "count": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "total_pl": 0.0,
+    "avg_pl": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "profit_factor": 0.0,
+    "expectancy": 0.0,
+    "max_drawdown_pl": 0.0,
+    "by_strategy": {}
+  },
+  "decisions_session": {},
+  "data_freshness": {
+    "threshold_seconds": 180,
+    "stale_symbols": [],
+    "symbol_age_seconds": {},
+    "oldest_age_seconds": null
+  },
+  "ai": {
+    "status": "no_data",
+    "rows": 0
+  },
+  "watchdog": {
+    "e5_enabled": true,
+    "enforced": false,
+    "entries_disabled": false,
+    "entries_disabled_reason": null,
+    "window_seconds": 900,
+    "api_errors_in_window": 0,
+    "rejects_in_window": 0,
+    "ttl_cancels_in_window": 0
+  },
+  "promotion_status": {
+    "enabled": true,
+    "eligible": false,
+    "checked_sessions": 2,
+    "window_days": 30,
+    "requirements": {
+      "min_sessions": 5,
+      "min_trades_total": 30,
+      "max_drawdown_pct": 4.0,
+      "max_daily_loss_pct": 2.0,
+      "max_cancel_rate_pct": 35.0,
+      "max_reject_rate_pct": 10.0,
+      "max_api_errors_per_hour": 20,
+      "require_no_stale_symbols": true,
+      "require_no_watchdog_halts": true,
+      "require_no_crashes": true,
+      "market_hours_local": "08:30-15:00 America/Chicago"
+    },
+    "computed_metrics": {
+      "total_trades": 0,
+      "worst_drawdown_pct": 0.0,
+      "worst_session_loss_pct": 0.0,
+      "cancel_rate_pct": null,
+      "reject_rate_pct": null,
+      "max_api_errors_per_hour": 12.0,
+      "stale_sessions_during_market_hours": 0,
+      "watchdog_halt_sessions": 0,
+      "crash_sessions": 0,
+      "orders_submitted_total": 0
+    },
+    "failed_checks": [
+      "min_sessions_not_met",
+      "min_trades_total_not_met"
+    ],
+    "notes": [
+      "cancel_rate_not_computed_no_submitted_orders",
+      "reject_rate_not_computed_no_submitted_orders"
+    ]
+  }
+}

@@ -1,3 +1,12 @@
-2026-02-16 17:47:43 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
-2026-02-16 17:47:44 | [SYSTEM] ℹ️ API not configured (set Alpaca keys in config/keys.ini)
-2026-02-16 17:47:44 | 🧠 [AI] Not enough data to train.
+2026-02-16 19:22:41 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 19:22:47 | [SYSTEM] ❌ API authentication failed (account fetch unauthorized)
+2026-02-16 19:22:48 | 🧠 [AI] Not enough data to train.
+2026-02-16 19:23:09 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 19:23:23 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_19.23.23_paper.json
+2026-02-16 19:28:28 | --- START v5.16.2 | Phase 2.5 — Persistence hardening (repo-owned schema, deadlock fix, config defaults sync) ---
+2026-02-16 19:28:28 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-16 19:28:28 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-16 19:28:29 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-16 19:28:29 | 🧠 [AI] Not enough data to train.
+2026-02-16 19:28:50 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-16 19:34:15 | [SYSTEM] 📄 Run summary written: summary_2026.02.16_19.34.15_paper.json
