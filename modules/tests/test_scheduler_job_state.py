@@ -27,3 +27,14 @@ def test_add_job_respects_cooldown_restore():
     s.add_job("demo", 10, lambda: None)
 
     assert s._jobs["demo"]["next_run"] >= 9999999999
+
+
+def test_add_job_respects_last_success_cadence_restore():
+    import time
+
+    now = int(time.time())
+    metrics = _DummyMetrics(state={"demo": {"last_success_at": now}})
+    s = JobScheduler(metrics_store=metrics)
+    s.add_job("demo", 60, lambda: None)
+
+    assert s._jobs["demo"]["next_run"] >= (now + 60)

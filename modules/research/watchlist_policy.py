@@ -212,6 +212,10 @@ def compute_crypto_stable_set(
     max_assets = max(1, _cfg_int(config, "crypto_stable_set_max_assets", 6))
     min_dv = max(0.0, _cfg_float(config, "crypto_stable_set_min_dollar_volume", 5_000_000.0))
     max_spread = max(0.0, _cfg_float(config, "crypto_stable_set_max_spread_pct", 0.5))
+    spread_mode = (_cfg(config, "crypto_stable_set_spread_proxy_mode", "RANGE_PCT") or "RANGE_PCT").strip().upper()
+    if spread_mode not in ("RANGE_PCT", "BIDASK", "OFF"):
+        spread_mode = "RANGE_PCT"
+    max_range_pct = max(0.0, _cfg_float(config, "crypto_stable_set_max_range_pct", max_spread))
 
     syms: List[str] = []
     try:
@@ -222,6 +226,8 @@ def compute_crypto_stable_set(
 
     kept: List[Tuple[str, float, Optional[float], str]] = []
     skipped = 0
+    skipped_insufficient_volume = 0
+    volume_ok_count = 0
 
     for sym in syms:
         try:
@@ -235,31 +241,51 @@ def compute_crypto_stable_set(
             continue
 
         dv = 0.0
+        has_volume_data = False
         try:
-            dv = float((df["close"].astype(float) * df["volume"].astype(float)).sum())
-        except Exception:
-            try:
-                dv = float(df["volume"].astype(float).sum())
-            except Exception:
+            vol = df["volume"].astype(float)
+            vol_sum = float(vol.sum())
+            has_volume_data = vol_sum > 0.0
+            if has_volume_data:
+                dv = float((df["close"].astype(float) * vol).sum())
+            else:
                 dv = 0.0
+        except Exception:
+            has_volume_data = False
+            dv = 0.0
+
+        if not has_volume_data:
+            skipped_insufficient_volume += 1
+            continue
+
+        volume_ok_count += 1
 
         if dv < float(min_dv):
             continue
 
-        spread = _get_quote_spread_pct(api, sym)
-        spread_src = "quote"
-        if spread is None:
+        spread = None
+        spread_src = "none"
+        if spread_mode == "OFF":
+            spread = 0.0
+            spread_src = "off"
+        elif spread_mode == "BIDASK":
+            spread = _get_quote_spread_pct(api, sym)
+            spread_src = "quote"
+            if spread is None:
+                continue
+            if float(spread) > float(max_spread):
+                continue
+        else:
             spread = _range_proxy_spread_pct(df)
             spread_src = "range_proxy"
-
-        if spread is None:
-            continue
-
-        if float(spread) > float(max_spread):
-            continue
+            if spread is None:
+                continue
+            if float(spread) > float(max_range_pct):
+                continue
 
         kept.append((sym, float(dv), float(spread), spread_src))
 
+    insufficient_volume_data = bool(syms) and volume_ok_count == 0
     kept.sort(key=lambda x: x[1], reverse=True)
     out = [k[0] for k in kept[:max_assets]]
 
@@ -268,17 +294,27 @@ def compute_crypto_stable_set(
         "max_assets": max_assets,
         "min_dollar_volume": min_dv,
         "max_spread_pct": max_spread,
+        "spread_proxy_mode": spread_mode,
+        "max_range_pct": max_range_pct,
         "universe_size": len(syms),
         "skipped": skipped,
+        "skipped_insufficient_volume": skipped_insufficient_volume,
+        "insufficient_volume_data": insufficient_volume_data,
         "selected": [
             {"symbol": s, "dollar_volume": dv, "spread_pct": sp, "spread_source": src}
             for (s, dv, sp, src) in kept[:max_assets]
         ],
     }
 
+
+    if insufficient_volume_data:
+        meta["status"] = "INSUFFICIENT_VOLUME_DATA"
+        meta["status_reason"] = "No crypto symbols had usable non-zero volume in lookback window"
     if callable(log):
         try:
-            log(f"[WATCHLIST] Crypto stable set selected: {out} (universe={len(syms)}, lookback={lookback})")
+            log(f"[WATCHLIST] Crypto stable set selected: {out} (universe={len(syms)}, lookback={lookback}, mode={spread_mode})")
+            if insufficient_volume_data:
+                log("[WATCHLIST] ⚠ STABLE_SET_INSUFFICIENT_VOLUME_DATA")
         except Exception:
             pass
 
@@ -357,10 +393,10 @@ def apply_watchlist_policy(
                     if not sym:
                         continue
                     if score < float(min_score):
-                        _reject(sym, "score_below_min")
+                        _reject(sym, "LOW_SCORE")
                         continue
                     if _is_crypto_symbol(sym):
-                        _reject(sym, "crypto_managed_separately")
+                        _reject(sym, "CRYPTO_MANAGED_SEPARATELY")
                         continue
                     candidate_syms.append(sym)
             except Exception:
@@ -372,7 +408,7 @@ def apply_watchlist_policy(
     cand_unique: List[str] = []
     for s in candidate_syms:
         if s in seen:
-            _reject(s, "duplicate_candidate")
+            _reject(s, "DUPLICATE_CANDIDATE")
             continue
         seen.add(s)
         cand_unique.append(s)
@@ -393,10 +429,10 @@ def apply_watchlist_policy(
             existing_set = set(new_non_crypto)
             for s in cand_unique:
                 if s in existing_set:
-                    _reject(s, "already_active")
+                    _reject(s, "ALREADY_ACTIVE")
                     continue
                 if max_add > 0 and added_count >= max_add:
-                    _reject(s, "max_add_limit")
+                    _reject(s, "MAX_ADD")
                     continue
                 new_non_crypto.append(s)
                 existing_set.add(s)
@@ -410,6 +446,20 @@ def apply_watchlist_policy(
 
     # Existing crypto symbols (only used if we are NOT replacing)
     existing_crypto = [s for s in existing_list if _is_crypto_symbol(s)]
+
+    # v6.16.3: stable-set empty should never purge existing crypto ACTIVE symbols.
+    # When replacement is enabled but selector returns empty, fall back to existing
+    # crypto and record an explicit reason code instead of fail-closed removal.
+    if crypto_enabled and crypto_replace and (not crypto_syms) and existing_crypto:
+        noop_reason = "EMPTY_STABLE_SET_NOOP"
+        if bool(crypto_meta.get("insufficient_volume_data", False)):
+            noop_reason = "INSUFFICIENT_VOLUME_DATA_NOOP"
+        for s in existing_crypto:
+            _reject(s, noop_reason)
+        crypto_meta["empty_stable_set_noop"] = True
+        crypto_meta["empty_stable_set_noop_reason"] = noop_reason
+        crypto_syms = list(existing_crypto)
+
     if crypto_enabled:
         if not crypto_replace:
             # keep existing cryptos + ensure stable set present
@@ -436,7 +486,7 @@ def apply_watchlist_policy(
             else:
                 if len(new_non_crypto) > room:
                     for d in new_non_crypto[room:]:
-                        _reject(d, "max_total_limit")
+                        _reject(d, "MAX_TOTAL")
                 new_non_crypto = new_non_crypto[:room]
         else:
             # truncate combined
@@ -447,7 +497,7 @@ def apply_watchlist_policy(
     # If max_total still exceeded (non-crypto only case)
     if max_total > 0 and len(new_list) > max_total:
         for d in new_list[max_total:]:
-            _reject(d, "max_total_limit")
+            _reject(d, "MAX_TOTAL")
         new_list = new_list[:max_total]
 
     # Compute deltas

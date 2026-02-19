@@ -18,10 +18,21 @@ class JobScheduler:
     def add_job(self, name: str, interval_sec: int, func: Callable[[], None]) -> None:
         if not name or interval_sec <= 0 or not callable(func):
             return
-        next_run = time.time() + int(interval_sec)
+        now = time.time()
+        next_run = now + int(interval_sec)
         try:
             if self.metrics is not None and hasattr(self.metrics, "get_job_state"):
                 st = self.metrics.get_job_state(name) or {}
+
+                # v6.17.0: restart-safe scheduling. If the job succeeded recently,
+                # preserve cadence across restarts instead of running again immediately.
+                last_ok = st.get("last_success_at")
+                if last_ok is not None:
+                    try:
+                        next_run = max(float(next_run), float(last_ok) + float(interval_sec))
+                    except Exception:
+                        pass
+
                 cool = st.get("cooldown_until")
                 if cool is not None:
                     next_run = max(float(next_run), float(cool))

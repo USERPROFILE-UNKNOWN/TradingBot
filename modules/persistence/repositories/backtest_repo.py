@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 
 from .base import RepoBase
@@ -12,7 +14,7 @@ class BacktestRepo(RepoBase):
       - backtest_results.db (backtest_results)
     """
 
-    def rebuild_backtest_table(self):
+    def rebuild_backtest_table(self, strategies=None):
         conn = self._conn("backtest_results")
         lock = self._lock("backtest_results")
         """Drop and recreate backtest_results table (legacy columns supported)."""
@@ -26,16 +28,23 @@ class BacktestRepo(RepoBase):
                     CREATE TABLE IF NOT EXISTS backtest_results (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         symbol TEXT,
+                        timeframe TEXT,
                         strategy TEXT,
                         start_date TEXT,
                         end_date TEXT,
                         win_rate REAL,
                         total_profit REAL,
                         max_drawdown REAL,
+                        expectancy REAL,
                         sharpe_ratio REAL,
                         trade_count INTEGER,
                         best_params TEXT,
                         tested_at TEXT,
+                        timestamp TEXT,
+                        best_strategy TEXT,
+                        best_profit REAL,
+                        best_strategy_fingerprint TEXT,
+                        strategy_fingerprints_json TEXT,
                         results_json TEXT,
                         UNIQUE(symbol, strategy, start_date, end_date)
                     )
@@ -66,16 +75,23 @@ class BacktestRepo(RepoBase):
 
             required = {
                 "symbol": "TEXT",
+                "timeframe": "TEXT",
                 "strategy": "TEXT",
                 "start_date": "TEXT",
                 "end_date": "TEXT",
                 "win_rate": "REAL",
                 "total_profit": "REAL",
                 "max_drawdown": "REAL",
+                "expectancy": "REAL",
                 "sharpe_ratio": "REAL",
                 "trade_count": "INTEGER",
                 "best_params": "TEXT",
                 "tested_at": "TEXT",
+                "timestamp": "TEXT",
+                "best_strategy": "TEXT",
+                "best_profit": "REAL",
+                "best_strategy_fingerprint": "TEXT",
+                "strategy_fingerprints_json": "TEXT",
                 "results_json": "TEXT",
             }
 
@@ -175,9 +191,40 @@ class BacktestRepo(RepoBase):
                 cursor.execute("PRAGMA table_info(backtest_results)")
                 existing_cols = {str(r[1]) for r in cursor.fetchall()}
 
-                # v6.15.1: full backtest rows may include dynamic strategy columns
-                # (e.g. PL_<strategy>, Trades_<strategy>). Add them forward-only.
-                for key, value in (data_dict or {}).items():
+                payload = dict(data_dict or {})
+
+                # v6.16.2: normalize common full-backtest fields into stable legacy columns
+                # so UI/export paths that still read these columns do not see all NULLs.
+                best_strategy = payload.get("best_strategy")
+                if best_strategy is not None and "strategy" not in payload:
+                    payload["strategy"] = best_strategy
+
+                best_profit = payload.get("best_profit")
+                if best_profit is not None and "total_profit" not in payload:
+                    payload["total_profit"] = best_profit
+
+                ts = payload.get("tested_at") or payload.get("timestamp")
+                if ts is not None:
+                    payload.setdefault("tested_at", ts)
+                    payload.setdefault("timestamp", ts)
+
+                payload.setdefault("timeframe", "1Min")
+                payload.setdefault("expectancy", payload.get("avg_pl"))
+
+                if "results_json" not in payload:
+                    compact = {}
+                    for k, v in payload.items():
+                        ks = str(k)
+                        if ks.startswith("PL_") or ks.startswith("Trades_"):
+                            compact[ks] = v
+                    if compact:
+                        try:
+                            payload["results_json"] = json.dumps(compact, ensure_ascii=False)
+                        except Exception:
+                            payload["results_json"] = None
+
+                # full backtest rows may include dynamic strategy columns
+                for key, value in payload.items():
                     if key in existing_cols:
                         continue
 
@@ -195,10 +242,9 @@ class BacktestRepo(RepoBase):
                         cursor.execute(f"ALTER TABLE backtest_results ADD COLUMN {key} {ctype}")
                         existing_cols.add(str(key))
                     except Exception:
-                        # Keep insert path resilient even if one add fails.
                         pass
 
-                filtered = {k: v for k, v in (data_dict or {}).items() if k in existing_cols}
+                filtered = {k: v for k, v in payload.items() if k in existing_cols}
                 if not filtered:
                     return
 

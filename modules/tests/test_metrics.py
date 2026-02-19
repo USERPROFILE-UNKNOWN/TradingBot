@@ -53,3 +53,17 @@ def test_metrics_store_v620_autopilot_and_job_state(tmp_path):
     assert row[1] == "SCAN"
     assert row[2] == "WARN"
     assert row[3] is not None
+
+
+def test_update_job_state_preserves_last_success_on_error(tmp_path):
+    from modules.metrics import MetricsStore
+
+    m = MetricsStore(str(tmp_path))
+    m.update_job_state("demo", "ok")
+    st1 = m.get_job_state("demo")
+    assert st1.get("last_success_at") is not None
+
+    m.update_job_state("demo", "error", error="boom")
+    st2 = m.get_job_state("demo")
+    assert st2.get("last_success_at") == st1.get("last_success_at")
+    assert st2.get("last_error") == "boom"

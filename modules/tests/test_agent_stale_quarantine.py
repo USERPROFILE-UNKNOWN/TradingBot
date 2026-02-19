@@ -69,6 +69,13 @@ def _cfg_with_active(*symbols):
     cfg = configparser.ConfigParser()
     cfg["CONFIGURATION"] = {
         "agent_stale_quarantine_threshold_seconds": "3600",
+        "agent_stale_quarantine_equity_market_hours_only": "True",
+        "agent_stale_quarantine_equity_market_open_hour_utc": "14",
+        "agent_stale_quarantine_equity_market_close_hour_utc": "21",
+        "agent_stale_quarantine_equity_after_hours_threshold_seconds": "86400",
+        "agent_stale_quarantine_crypto_threshold_seconds": "3600",
+        "agent_stale_quarantine_max_per_day": "12",
+        "agent_stale_quarantine_cooldown_minutes": "0",
         "agent_stale_quarantine_warmup_minutes": "0",
         "agent_auto_backfill_enabled": "True",
     }
@@ -107,6 +114,7 @@ def test_warmup_window_disables_quarantine():
 
 def test_stale_symbols_with_history_are_quarantined_after_warmup():
     cfg = _cfg_with_active("AAPL")
+    cfg["CONFIGURATION"]["agent_stale_quarantine_equity_market_hours_only"] = "False"
     old_ts = datetime.now(timezone.utc) - timedelta(hours=5)
     agent = _DummyAgent(cfg, _DummyDB({"AAPL": old_ts}))
     agent._agent_started_at = 0.0
@@ -117,3 +125,63 @@ def test_stale_symbols_with_history_are_quarantined_after_warmup():
     assert "AAPL" in cfg["WATCHLIST_ARCHIVE_STOCK"]
     assert agent._persist_calls == 1
     assert any(a[0] == "STALE_SYMBOL_QUARANTINE" for a in agent.metrics.anomalies)
+
+
+
+def test_equity_after_hours_uses_relaxed_threshold(monkeypatch):
+    cfg = _cfg_with_active("AAPL")
+    cfg["CONFIGURATION"]["agent_stale_quarantine_threshold_seconds"] = "3600"
+    cfg["CONFIGURATION"]["agent_stale_quarantine_equity_after_hours_threshold_seconds"] = "86400"
+    old_ts = datetime(2026, 2, 19, 2, 0, tzinfo=timezone.utc) - timedelta(hours=5)
+    agent = _DummyAgent(cfg, _DummyDB({"AAPL": old_ts}))
+
+    class _FakeDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 2, 19, 2, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("modules.agent_master.datetime", _FakeDateTime, raising=True)
+
+    AgentMaster._run_stale_symbol_quarantine(agent)
+
+    assert "AAPL" in cfg["WATCHLIST_ACTIVE_STOCK"]
+    assert "AAPL" not in cfg["WATCHLIST_ARCHIVE_STOCK"]
+
+
+def test_crypto_quarantine_uses_crypto_threshold(monkeypatch):
+    cfg = _cfg_with_active("BTC/USD")
+    cfg["CONFIGURATION"]["agent_stale_quarantine_crypto_threshold_seconds"] = "3600"
+    old_ts = datetime(2026, 2, 19, 2, 0, tzinfo=timezone.utc) - timedelta(hours=5)
+    agent = _DummyAgent(cfg, _DummyDB({"BTC/USD": old_ts}))
+
+    class _FakeDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 2, 19, 2, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("modules.agent_master.datetime", _FakeDateTime, raising=True)
+
+    AgentMaster._run_stale_symbol_quarantine(agent)
+
+    assert "BTC/USD" not in cfg["WATCHLIST_ACTIVE_CRYPTO"]
+    assert "BTC/USD" in cfg["WATCHLIST_ARCHIVE_CRYPTO"]
+
+
+def test_quarantine_respects_daily_budget(monkeypatch):
+    cfg = _cfg_with_active("AAPL", "MSFT")
+    cfg["CONFIGURATION"]["agent_stale_quarantine_max_per_day"] = "1"
+    cfg["CONFIGURATION"]["agent_stale_quarantine_equity_market_hours_only"] = "False"
+    old_ts = datetime(2026, 2, 19, 15, 0, tzinfo=timezone.utc) - timedelta(hours=5)
+    agent = _DummyAgent(cfg, _DummyDB({"AAPL": old_ts, "MSFT": old_ts}))
+
+    class _FakeDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 2, 19, 15, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("modules.agent_master.datetime", _FakeDateTime, raising=True)
+
+    AgentMaster._run_stale_symbol_quarantine(agent)
+
+    moved = int("AAPL" in cfg["WATCHLIST_ARCHIVE_STOCK"]) + int("MSFT" in cfg["WATCHLIST_ARCHIVE_STOCK"])
+    assert moved == 1

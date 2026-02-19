@@ -52,6 +52,26 @@ def _extract_strategy_sections(config: Any) -> Dict[str, Dict[str, str]]:
     return out
 
 
+
+
+def _extract_strategy_matrix_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for k, v in (row or {}).items():
+        ks = str(k)
+        if ks.startswith("PL_") or ks.startswith("Trades_"):
+            out[ks] = v
+    if out:
+        return out
+    try:
+        raw = row.get("results_json")
+        if raw:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                return {str(k): v for k, v in data.items() if str(k).startswith("PL_") or str(k).startswith("Trades_")}
+    except Exception:
+        pass
+    return {}
+
 def _params_hash(payload: Dict[str, Any]) -> str:
     try:
         b = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -140,8 +160,9 @@ def export_backtest_bundle(
 
     # Strategy-level aggregates based on existing columns (PL_* and Trades_*)
     try:
-        pl_cols = [c for c in cols if str(c).startswith("PL_")]
-        tr_cols = [c for c in cols if str(c).startswith("Trades_")]
+        matrix_rows = [_extract_strategy_matrix_from_row(r) for r in rows]
+        pl_cols = sorted({k for m in matrix_rows for k in m.keys() if str(k).startswith("PL_")})
+        tr_cols = sorted({k for m in matrix_rows for k in m.keys() if str(k).startswith("Trades_")})
 
         # discover strategy names from PL_ prefix
         strat_names = sorted({str(c)[3:] for c in pl_cols})
@@ -154,13 +175,13 @@ def export_backtest_bundle(
             n = 0
             n_pos = 0
 
-            for row in rows:
+            for row, matrix in zip(rows, matrix_rows):
                 try:
-                    v = float(row.get(pl_key, 0.0) or 0.0)
+                    v = float(matrix.get(pl_key, row.get(pl_key, 0.0)) or 0.0)
                 except Exception:
                     v = 0.0
                 try:
-                    t = int(float(row.get(tr_key, 0) or 0))
+                    t = int(float(matrix.get(tr_key, row.get(tr_key, 0)) or 0))
                 except Exception:
                     t = 0
 

@@ -21,6 +21,7 @@ from .research.tv_autovalidation import TradingViewAutoValidator
 from .research.watchlist_policy import apply_watchlist_policy
 from .research.full_backtest_service import run_full_backtest_service
 from .watchlist_api import add_watchlist_symbol, get_watchlist_symbols, remove_watchlist_symbol
+from .agent_shadow import AgentShadow
 
 
 class AgentMaster:
@@ -68,6 +69,7 @@ class AgentMaster:
         )
 
         self._tv_server = None
+        self._shadow_agent = None
 
         # TradingView candidate de-dup (per symbol/timeframe/signal)
         self._tv_candidate_last = {}
@@ -89,6 +91,9 @@ class AgentMaster:
         # Phase 1.5: TradingView webhook ingestion (optional)
         self._start_tradingview_webhook_if_enabled()
 
+        # v6.20.0: AgentShadow proposal loop (PAPER-first, no direct execution).
+        self._start_agent_shadow_if_enabled()
+
     def shutdown(self):
         try:
             if self._tv_server is not None:
@@ -98,6 +103,12 @@ class AgentMaster:
 
         try:
             self.scheduler.stop()
+        except Exception:
+            pass
+
+        try:
+            if self._shadow_agent is not None:
+                self._shadow_agent.stop()
         except Exception:
             pass
 
@@ -112,6 +123,36 @@ class AgentMaster:
             pass
         self.log(f"🧠 [AGENT] Mode set to {candidate}")
         return True
+
+    def _resolve_runtime_paths(self) -> Dict[str, str]:
+        paths = {}
+        try:
+            raw = getattr(self.db, "paths", None)
+            if isinstance(raw, dict):
+                paths.update({str(k): str(v) for k, v in raw.items() if v})
+        except Exception:
+            pass
+
+        if not paths.get("logs"):
+            paths["logs"] = os.path.join(os.getcwd(), "logs")
+        return paths
+
+    def _start_agent_shadow_if_enabled(self) -> None:
+        try:
+            enabled = self._cfg_bool("CONFIGURATION", "agent_shadow_enabled", True)
+        except Exception:
+            enabled = True
+
+        if not enabled:
+            return
+
+        try:
+            paths = self._resolve_runtime_paths()
+            self._shadow_agent = AgentShadow(self.config, self.db, paths, log_fn=self.log)
+            self._shadow_agent.start()
+            self.log("🧠 [AGENT] AgentShadow started.")
+        except Exception as e:
+            self.log(f"[AGENT] Shadow startup failed: {e}")
 
     def publish(self, event_type: str, payload: dict | None = None):
         self.bus.publish(event_type, payload or {})
@@ -310,9 +351,36 @@ class AgentMaster:
             {"checked": checked},
         )
 
+    def _is_equity_market_hours_utc(self, now_utc: datetime) -> bool:
+        """Best-effort weekday market-hours gate in UTC."""
+        try:
+            if int(now_utc.weekday()) >= 5:
+                return False
+        except Exception:
+            return False
+
+        start_h = max(0, min(23, self._cfg_int("CONFIGURATION", "agent_stale_quarantine_equity_market_open_hour_utc", 14)))
+        end_h = max(0, min(23, self._cfg_int("CONFIGURATION", "agent_stale_quarantine_equity_market_close_hour_utc", 21)))
+        h = int(getattr(now_utc, "hour", 0) or 0)
+
+        if start_h <= end_h:
+            return start_h <= h < end_h
+        return h >= start_h or h < end_h
+
+    def _stale_quarantine_daily_budget_remaining(self, now_utc: datetime) -> int:
+        budget = max(0, self._cfg_int("CONFIGURATION", "agent_stale_quarantine_max_per_day", 12))
+        day_key = now_utc.strftime("%Y-%m-%d")
+        if getattr(self, "_stale_quarantine_day", None) != day_key:
+            self._stale_quarantine_day = day_key
+            self._stale_quarantine_count_today = 0
+        used = int(getattr(self, "_stale_quarantine_count_today", 0) or 0)
+        return max(0, int(budget) - used)
+
     def _run_stale_symbol_quarantine(self) -> None:
-        threshold = float(self._cfg_int("CONFIGURATION", "agent_stale_quarantine_threshold_seconds", 21600))
-        if threshold <= 0:
+        eq_threshold = float(self._cfg_int("CONFIGURATION", "agent_stale_quarantine_threshold_seconds", 21600))
+        eq_after_hours_threshold = float(self._cfg_int("CONFIGURATION", "agent_stale_quarantine_equity_after_hours_threshold_seconds", 86400))
+        crypto_threshold = float(self._cfg_int("CONFIGURATION", "agent_stale_quarantine_crypto_threshold_seconds", int(eq_threshold)))
+        if eq_threshold <= 0 and crypto_threshold <= 0:
             return
 
         warmup_minutes = max(0, self._cfg_int("CONFIGURATION", "agent_stale_quarantine_warmup_minutes", 45))
@@ -327,21 +395,33 @@ class AgentMaster:
             )
             return
 
+        cooldown_minutes = max(0, self._cfg_int("CONFIGURATION", "agent_stale_quarantine_cooldown_minutes", 60))
+        cooldown_until = float(getattr(self, "_stale_quarantine_cooldown_until", 0.0) or 0.0)
+        if cooldown_until > now_epoch:
+            self.metrics.log_metric(
+                "agent_stale_quarantine_cooldown_remaining_seconds",
+                float(cooldown_until - now_epoch),
+                {"cooldown_minutes": int(cooldown_minutes)},
+            )
+            return
+
         active = list(get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL") or [])
         if not active:
             return
 
+        now = datetime.now(timezone.utc)
+        equities_market_hours_only = self._cfg_bool("CONFIGURATION", "agent_stale_quarantine_equity_market_hours_only", True)
+        is_equity_hours = AgentMaster._is_equity_market_hours_utc(self, now)
+
         stale_syms = []
         uninitialized_syms = []
-        now = datetime.now(timezone.utc)
+
         for sym in active:
             try:
                 ts = self.db.get_last_timestamp(sym)
             except Exception:
                 ts = None
 
-            # v6.1.0: Missing history is UNINITIALIZED, not stale.
-            # Let auto-backfill hydrate symbols instead of collapsing ACTIVE on startup.
             if ts is None:
                 uninitialized_syms.append(sym)
                 continue
@@ -349,8 +429,17 @@ class AgentMaster:
             try:
                 age = (now - ts).total_seconds()
             except Exception:
-                age = threshold + 1
-            if age >= threshold:
+                age = max(eq_threshold, crypto_threshold, 1.0) + 1.0
+
+            if "/" in str(sym):
+                threshold = crypto_threshold
+            else:
+                if equities_market_hours_only and (not is_equity_hours):
+                    threshold = eq_after_hours_threshold
+                else:
+                    threshold = eq_threshold
+
+            if threshold > 0 and age >= threshold:
                 stale_syms.append(sym)
 
         if uninitialized_syms and self._cfg_bool("CONFIGURATION", "agent_auto_backfill_enabled", True):
@@ -362,6 +451,14 @@ class AgentMaster:
             except Exception:
                 pass
 
+        budget_left = AgentMaster._stale_quarantine_daily_budget_remaining(self, now)
+        if budget_left <= 0:
+            self.metrics.log_metric("agent_stale_quarantine_budget_remaining", 0.0, {"budget_exhausted": 1})
+            return
+
+        if len(stale_syms) > budget_left:
+            stale_syms = stale_syms[:budget_left]
+
         moved = []
         for sym in stale_syms:
             removed = remove_watchlist_symbol(self.config, sym, group="ACTIVE")
@@ -370,6 +467,9 @@ class AgentMaster:
 
         if moved:
             self._persist_split_config()
+            self._stale_quarantine_count_today = int(getattr(self, "_stale_quarantine_count_today", 0) or 0) + len(moved)
+            if cooldown_minutes > 0:
+                self._stale_quarantine_cooldown_until = now_epoch + (cooldown_minutes * 60.0)
             self.metrics.log_anomaly(
                 "STALE_SYMBOL_QUARANTINE",
                 severity="WARN",

@@ -93,6 +93,9 @@ class TradingApp(ctk.CTk):
         self._watchlist_policy_in_progress = False
         self._watchlist_policy_after_id = None
 
+        # v6.16.0: UI refresh loop lifecycle guard (start once).
+        self._ui_loop_started = False
+
         # v5.13.2 updateA: Mini-player (Live Log)
         # When enabled, the UI throttles heavy redraw loops while the engine continues.
         self._miniplayer_enabled = self._read_miniplayer_start_enabled()
@@ -105,7 +108,21 @@ class TradingApp(ctk.CTk):
             self.after(15000, self._watchlist_policy_tick)
         except Exception:
             pass
-        self.after(1000, self.update_ui_loop)
+        self._start_ui_loop()
+
+    def _start_ui_loop(self):
+        """Start the periodic UI refresh loop exactly once."""
+        if bool(getattr(self, "_ui_loop_started", False)):
+            return
+        self._ui_loop_started = True
+        try:
+            self.after(1000, self.update_ui_loop)
+        except Exception:
+            # fallback: attempt a slower schedule if Tk is still initializing
+            try:
+                self.after(2000, self.update_ui_loop)
+            except Exception:
+                self._ui_loop_started = False
 
     def on_closing(self):
         if self.engine and self.engine.active:
@@ -121,6 +138,9 @@ class TradingApp(ctk.CTk):
             if getattr(self, '_watchlist_policy_after_id', None) is not None:
                 self.after_cancel(self._watchlist_policy_after_id)
                 self._watchlist_policy_after_id = None
+
+            # v6.16.0: UI refresh loop lifecycle guard (start once).
+            self._ui_loop_started = False
         except Exception:
             pass
         # Release E3: write run summary on app close (best-effort)
@@ -422,6 +442,18 @@ class TradingApp(ctk.CTk):
                         self.dashboard_logic.update_health_widget()
                     except Exception:
                         pass
+
+            try:
+                from .log_throttle import log_throttled
+                log_throttled(
+                    self.log,
+                    "E_UI_HEARTBEAT",
+                    f"UI refresh heartbeat (interval_ms={self._ui_loop_interval_ms()}, mini={int(mini)})",
+                    key="ui_refresh_heartbeat",
+                    throttle_sec=300,
+                )
+            except Exception:
+                pass
 
             # Positions tab redraw can be expensive; only refresh it while in miniplayer
             # when the user is actually viewing that tab.
@@ -1461,13 +1493,53 @@ class TradingApp(ctk.CTk):
                 pass
 
 
+    def _is_backtest_df_empty(self, df) -> bool:
+        if df is None:
+            return True
+        try:
+            return bool(getattr(df, "empty", False))
+        except Exception:
+            return True
+
+    def _load_backtest_rows_fallback(self, rows):
+        # Load in-memory backtest rows into Backtest Lab when DB refresh is empty.
+        if not rows:
+            return False
+        try:
+            import pandas as pd
+            df = pd.DataFrame(list(rows))
+        except Exception:
+            return False
+
+        if self._is_backtest_df_empty(df):
+            return False
+
+        self.backtest_df = df
+        self.populate_backtest_ui(self.backtest_df)
+        return True
+
+    def _on_full_backtest_complete(self, payload):
+        payload = payload or {}
+        self.refresh_backtest_ui()
+
+        if not self._is_backtest_df_empty(self.backtest_df):
+            return
+
+        rows = payload.get("rows") if isinstance(payload, dict) else None
+        loaded = self._load_backtest_rows_fallback(rows)
+        if loaded:
+            try:
+                self.log("⚠️ Backtest DB refresh returned empty; loaded latest in-memory service results into Backtest Lab.")
+            except Exception:
+                pass
+
     def run_full_backtest_thread(self): 
         if messagebox.askyesno("Backtest", "Run?"): 
             threading.Thread(target=self.run_full_backtest, daemon=True).start()
 
     def run_full_backtest(self):
         self.log("Starting Backtest...")
-        run_full_backtest_service(
+        payload = run_full_backtest_service(
             self.config,
             self.db_manager,
             simulate_strategy=self.simulate_strategy_numpy,
@@ -1475,7 +1547,19 @@ class TradingApp(ctk.CTk):
             rebuild_table=True,
             sleep_per_symbol_sec=0.05,
         )
-        self.call_ui(self.refresh_backtest_ui)
+
+        try:
+            if isinstance(payload, dict) and payload.get("ok"):
+                self.log(
+                    "[BACKTEST] Service complete "
+                    f"(symbols={payload.get('count', 0)}, saved={payload.get('saved_count', 0)}, save_failures={payload.get('save_failures', 0)})."
+                )
+            else:
+                self.log(f"[BACKTEST] Service returned: {payload}")
+        except Exception:
+            pass
+
+        self.call_ui(self._on_full_backtest_complete, payload)
 
     def refresh_backtest_ui(self):
         # Update Cache

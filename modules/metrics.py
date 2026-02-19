@@ -225,6 +225,16 @@ class MetricsStore:
         now_ts = int(time.time())
         ok = str(status).strip().lower() == "ok"
         with self._connect() as conn:
+            existing = conn.execute(
+                "SELECT last_success_at, cooldown_until FROM job_run_state WHERE job_name = ?",
+                (str(job_name),),
+            ).fetchone()
+            prev_last_success = int(existing[0]) if (existing and existing[0] is not None) else None
+            prev_cooldown = int(existing[1]) if (existing and existing[1] is not None) else None
+
+            next_last_success = now_ts if ok else prev_last_success
+            next_cooldown = int(cooldown_until) if cooldown_until is not None else prev_cooldown
+
             conn.execute(
                 """
                 INSERT INTO job_run_state(job_name, last_success_at, last_attempt_at, cooldown_until, last_error)
@@ -237,9 +247,9 @@ class MetricsStore:
                 """,
                 (
                     str(job_name),
-                    (now_ts if ok else None),
+                    next_last_success,
                     now_ts,
-                    (int(cooldown_until) if cooldown_until is not None else None),
+                    next_cooldown,
                     ("" if ok else str(error or "")),
                 ),
             )

@@ -60,7 +60,32 @@ def test_watchlist_policy_returns_rejection_reasons(tmp_path):
 
     assert res.get("changed") is True
     rejected = res.get("rejected") or {}
-    assert "AAPL" in rejected and "already_active" in rejected["AAPL"]
-    assert "NVDA" in rejected and "max_add_limit" in rejected["NVDA"]
-    assert "TSLA" in rejected and "score_below_min" in rejected["TSLA"]
-    assert "BTC/USD" in rejected and "crypto_managed_separately" in rejected["BTC/USD"]
+    assert "AAPL" in rejected and "ALREADY_ACTIVE" in rejected["AAPL"]
+    assert "NVDA" in rejected and "MAX_ADD" in rejected["NVDA"]
+    assert "TSLA" in rejected and "LOW_SCORE" in rejected["TSLA"]
+    assert "BTC/USD" in rejected and "CRYPTO_MANAGED_SEPARATELY" in rejected["BTC/USD"]
+
+
+class _DBCryptoEmpty(_DB):
+    def get_all_symbols(self):
+        return ["BTC/USD", "ETH/USD"]
+
+    def get_history(self, _sym, _limit):
+        return None
+
+
+def test_watchlist_policy_empty_crypto_stable_set_is_noop(tmp_path):
+    db = _DBCryptoEmpty([])
+    cfg = _cfg()
+    cfg["CONFIGURATION"]["crypto_stable_set_enabled"] = "True"
+    cfg["CONFIGURATION"]["crypto_stable_set_replace_existing"] = "True"
+    cfg["WATCHLIST_ACTIVE_CRYPTO"] = {"BTC/USD": "", "ETH/USD": ""}
+    paths = {"logs": str(tmp_path)}
+
+    res = apply_watchlist_policy(cfg, db, paths)
+
+    assert res.get("changed") is False
+    assert set(res.get("new_watchlist") or []) == {"AAPL", "BTC/USD", "ETH/USD"}
+    rejected = res.get("rejected") or {}
+    assert "BTC/USD" in rejected and "INSUFFICIENT_VOLUME_DATA_NOOP" in rejected["BTC/USD"]
+    assert "ETH/USD" in rejected and "INSUFFICIENT_VOLUME_DATA_NOOP" in rejected["ETH/USD"]

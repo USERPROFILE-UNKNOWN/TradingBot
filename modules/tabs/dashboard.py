@@ -40,9 +40,24 @@ class DashboardTab:
         self.heatmap_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
     def update(self):
-        self.update_equity_chart()
-        self.update_health_widget()
-        self.update_heatmap()
+        # Keep health status responsive even when chart/heatmap rendering fails.
+        try:
+            self.update_equity_chart()
+        except Exception:
+            pass
+
+        try:
+            self.update_health_widget()
+        except Exception:
+            try:
+                self.health_lbl.configure(text="Health: unavailable")
+            except Exception:
+                pass
+
+        try:
+            self.update_heatmap()
+        except Exception:
+            pass
 
     def update_equity_chart(self):
         history = self.db.get_recent_history(limit=50)
