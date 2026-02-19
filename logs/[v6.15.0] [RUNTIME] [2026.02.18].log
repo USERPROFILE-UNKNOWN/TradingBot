@@ -1,0 +1,54 @@
+2026-02-18 22:51:22 | --- START v6.15.0 | Phase 5 — Shadow data-quality failure scoring ---
+2026-02-18 22:51:46 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-18 22:51:47 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-18 22:51:47 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-18 22:51:47 | 🧠 [AI] Not enough data to train.
+2026-02-18 22:52:16 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-18 22:52:23 | [DB] ⏳ AMD | fetched 7972 | inserted 7773 | up_to_date False (1/12)
+2026-02-18 22:52:23 | [DB] ⏳ SOXL | fetched 8189 | inserted 7990 | up_to_date False (2/12)
+2026-02-18 22:52:23 | [DB] ⏳ UBER | fetched 8157 | inserted 7958 | up_to_date False (3/12)
+2026-02-18 22:52:23 | [DB] ⏳ PLTR | fetched 8045 | inserted 7846 | up_to_date False (4/12)
+2026-02-18 22:52:23 | [DB] ⏳ TQQQ | fetched 9409 | inserted 9210 | up_to_date False (5/12)
+2026-02-18 22:52:27 | [DB] ⏳ HOOD | fetched 8003 | inserted 7804 | up_to_date False (6/12)
+2026-02-18 22:52:27 | [DB] ⏳ COIN | fetched 7910 | inserted 7711 | up_to_date False (7/12)
+2026-02-18 22:52:28 | [DB] ⏳ XLE | fetched 8183 | inserted 7984 | up_to_date False (8/12)
+2026-02-18 22:52:28 | [DB] ⏳ SQQQ | fetched 8829 | inserted 8630 | up_to_date False (9/12)
+2026-02-18 22:52:28 | [DB] ⏳ MARA | fetched 8500 | inserted 8301 | up_to_date False (10/12)
+2026-02-18 22:52:29 | [DB] ⏳ SPXU | fetched 3895 | inserted 3696 | up_to_date False (11/12)
+2026-02-18 22:52:29 | [DB] ⏳ SOXS | fetched 6138 | inserted 5939 | up_to_date False (12/12)
+2026-02-18 22:52:29 | [DB] ✅ Update Complete! You may close this window.
+2026-02-18 22:52:29 | 🧠 [AI] Retraining after DB update...
+2026-02-18 22:52:58 | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.36% | Rows: 90061 | PosRate: 43.09%
+2026-02-18 22:53:23 | Starting Backtest...
+2026-02-18 22:53:24 | Backtesting... 5/12
+2026-02-18 22:53:24 | Backtesting... 10/12
+2026-02-18 22:53:24 | ✅ Backtest Complete.
+2026-02-18 22:55:50 | [SYSTEM] 🚀 v6.15.0 Engine Started (Phase 5 — Shadow data-quality failure scoring)
+2026-02-18 22:55:51 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-18 22:55:51 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-18 22:57:04 | [SYSTEM] 🛑 Stopping Engine...
+2026-02-18 22:57:06 | [SYSTEM] 📄 Run summary written: summary_2026.02.18_22.57.06_paper.json
+2026-02-18 23:10:57 | --- START v6.15.0 | Phase 5 — Shadow data-quality failure scoring ---
+2026-02-18 23:10:57 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-18 23:10:57 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-18 23:10:58 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-18 23:11:34 | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.36% | Rows: 90061 | PosRate: 43.09%
+2026-02-18 23:11:43 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-18 23:12:35 | Starting Backtest...
+2026-02-18 23:12:36 | Backtesting... 5/12
+2026-02-18 23:12:36 | Backtesting... 10/12
+2026-02-18 23:12:36 | ✅ Backtest Complete.
+2026-02-18 23:15:59 | ⏳ PLTR | fetched 588 | inserted 0 | up_to_date True (1/12)
+2026-02-18 23:15:59 | ⏳ AMD | fetched 587 | inserted 0 | up_to_date True (2/12)
+2026-02-18 23:15:59 | ⏳ TQQQ | fetched 620 | inserted 0 | up_to_date True (3/12)
+2026-02-18 23:15:59 | ⏳ SOXL | fetched 589 | inserted 0 | up_to_date True (4/12)
+2026-02-18 23:15:59 | ⏳ UBER | fetched 585 | inserted 0 | up_to_date True (5/12)
+2026-02-18 23:15:59 | ⏳ COIN | fetched 588 | inserted 0 | up_to_date True (6/12)
+2026-02-18 23:15:59 | ⏳ MARA | fetched 552 | inserted 0 | up_to_date True (7/12)
+2026-02-18 23:15:59 | ⏳ XLE | fetched 591 | inserted 0 | up_to_date True (8/12)
+2026-02-18 23:15:59 | ⏳ HOOD | fetched 578 | inserted 0 | up_to_date True (9/12)
+2026-02-18 23:15:59 | ⏳ SQQQ | fetched 627 | inserted 0 | up_to_date True (10/12)
+2026-02-18 23:16:00 | ⏳ SOXS | fetched 400 | inserted 0 | up_to_date True (11/12)
+2026-02-18 23:16:00 | ⏳ SPXU | fetched 412 | inserted 0 | up_to_date True (12/12)
+2026-02-18 23:16:00 | ✅ Update Complete! You may close this window.
+2026-02-18 23:18:02 | [SYSTEM] 📄 Run summary written: summary_2026.02.18_23.18.02_paper.json

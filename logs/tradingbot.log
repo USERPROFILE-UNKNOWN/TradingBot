@@ -1,0 +1,197 @@
+2026-02-18 22:51:21,672 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
+2026-02-18 22:51:46,905 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-18 22:51:47,128 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
+2026-02-18 22:51:47,443 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
+2026-02-18 22:51:47,522 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
+2026-02-18 22:52:16,976 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-18 22:52:23,085 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ AMD | fetched 7972 | inserted 7773 | up_to_date False (1/12)
+2026-02-18 22:52:23,215 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ SOXL | fetched 8189 | inserted 7990 | up_to_date False (2/12)
+2026-02-18 22:52:23,339 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ UBER | fetched 8157 | inserted 7958 | up_to_date False (3/12)
+2026-02-18 22:52:23,482 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ PLTR | fetched 8045 | inserted 7846 | up_to_date False (4/12)
+2026-02-18 22:52:23,715 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ TQQQ | fetched 9409 | inserted 9210 | up_to_date False (5/12)
+2026-02-18 22:52:27,861 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ HOOD | fetched 8003 | inserted 7804 | up_to_date False (6/12)
+2026-02-18 22:52:27,976 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ COIN | fetched 7910 | inserted 7711 | up_to_date False (7/12)
+2026-02-18 22:52:28,101 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ XLE | fetched 8183 | inserted 7984 | up_to_date False (8/12)
+2026-02-18 22:52:28,233 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ SQQQ | fetched 8829 | inserted 8630 | up_to_date False (9/12)
+2026-02-18 22:52:28,444 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ MARA | fetched 8500 | inserted 8301 | up_to_date False (10/12)
+2026-02-18 22:52:29,200 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ SPXU | fetched 3895 | inserted 3696 | up_to_date False (11/12)
+2026-02-18 22:52:29,822 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ⏳ SOXS | fetched 6138 | inserted 5939 | up_to_date False (12/12)
+2026-02-18 22:52:29,824 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | [DB] ✅ Update Complete! You may close this window.
+2026-02-18 22:52:29,825 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Retraining after DB update...
+2026-02-18 22:52:58,492 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.36% | Rows: 90061 | PosRate: 43.09%
+2026-02-18 22:53:23,510 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | Starting Backtest...
+2026-02-18 22:53:23,658 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:23,787 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:23,899 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,005 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,125 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,126 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | Backtesting... 5/12
+2026-02-18 22:53:24,237 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,345 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,446 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,562 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,671 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,672 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | Backtesting... 10/12
+2026-02-18 22:53:24,791 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,902 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 22:53:24,903 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | ✅ Backtest Complete.
+2026-02-18 22:55:50,746 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🚀 v6.15.0 Engine Started (Phase 5 — Shadow data-quality failure scoring)
+2026-02-18 22:55:51,444 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
+2026-02-18 22:55:51,498 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
+2026-02-18 22:57:04,505 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🛑 Stopping Engine...
+2026-02-18 22:57:06,971 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.18_22.57.06_paper.json
+2026-02-18 23:10:57,521 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-18 23:10:57,698 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
+2026-02-18 23:10:58,092 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
+2026-02-18 23:11:34,421 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.36% | Rows: 90061 | PosRate: 43.09%
+2026-02-18 23:11:43,317 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-18 23:12:35,397 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | Starting Backtest...
+2026-02-18 23:12:35,662 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:35,785 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:35,900 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,014 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,130 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,131 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | Backtesting... 5/12
+2026-02-18 23:12:36,247 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,361 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,471 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,593 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,730 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,731 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | Backtesting... 10/12
+2026-02-18 23:12:36,838 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,964 | ERROR | modules.database | component=app mode=- symbol=- order_id=- strategy=- | DB Error Saving Backtest
+Traceback (most recent call last):
+  File "modules\persistence\repositories\backtest_repo.py", line 122, in save_backtest_result
+    cursor.execute(sql, list(data_dict.values()))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: table backtest_results has no column named PL_THE_GENERAL
+2026-02-18 23:12:36,964 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ✅ Backtest Complete.
+2026-02-18 23:15:59,639 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ PLTR | fetched 588 | inserted 0 | up_to_date True (1/12)
+2026-02-18 23:15:59,640 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ AMD | fetched 587 | inserted 0 | up_to_date True (2/12)
+2026-02-18 23:15:59,650 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ TQQQ | fetched 620 | inserted 0 | up_to_date True (3/12)
+2026-02-18 23:15:59,658 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ SOXL | fetched 589 | inserted 0 | up_to_date True (4/12)
+2026-02-18 23:15:59,662 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ UBER | fetched 585 | inserted 0 | up_to_date True (5/12)
+2026-02-18 23:15:59,852 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ COIN | fetched 588 | inserted 0 | up_to_date True (6/12)
+2026-02-18 23:15:59,920 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ MARA | fetched 552 | inserted 0 | up_to_date True (7/12)
+2026-02-18 23:15:59,930 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ XLE | fetched 591 | inserted 0 | up_to_date True (8/12)
+2026-02-18 23:15:59,964 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ HOOD | fetched 578 | inserted 0 | up_to_date True (9/12)
+2026-02-18 23:15:59,969 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ SQQQ | fetched 627 | inserted 0 | up_to_date True (10/12)
+2026-02-18 23:16:00,059 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ SOXS | fetched 400 | inserted 0 | up_to_date True (11/12)
+2026-02-18 23:16:00,110 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ⏳ SPXU | fetched 412 | inserted 0 | up_to_date True (12/12)
+2026-02-18 23:16:00,113 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | ✅ Update Complete! You may close this window.
+2026-02-18 23:18:02,857 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.18_23.18.02_paper.json
