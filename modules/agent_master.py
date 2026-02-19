@@ -18,6 +18,8 @@ from .metrics import MetricsStore
 from .experiments import ExperimentsStore
 from .logging_utils import get_component_logger
 from .research.tv_autovalidation import TradingViewAutoValidator
+from .research.watchlist_policy import apply_watchlist_policy
+from .research.full_backtest_service import run_full_backtest_service
 from .watchlist_api import add_watchlist_symbol, get_watchlist_symbols, remove_watchlist_symbol
 
 
@@ -69,13 +71,16 @@ class AgentMaster:
 
         # TradingView candidate de-dup (per symbol/timeframe/signal)
         self._tv_candidate_last = {}
+        self._agent_started_at = time.time()
         self._last_backfill_started_at = 0.0
         self._last_daily_report_date = ""
         self._last_research_sweep_date = ""
+        self._last_full_backtest_date = ""
         self._live_change_day = ""
         self._live_config_tunes_today = 0
         self._live_promotions_today = 0
         self._hard_halt_active = False
+        self._autopilot_seq = 0
 
         self.bus.subscribe("*", self._on_event)
         self._register_jobs()
@@ -163,6 +168,21 @@ class AgentMaster:
             self.scheduler.add_job("agent_stale_quarantine", 600, self._run_stale_symbol_quarantine)
         if self._cfg_bool("CONFIGURATION", "agent_auto_backfill_enabled", True):
             self.scheduler.add_job("agent_auto_backfill", 300, self._run_auto_backfill)
+        if self._cfg_bool("CONFIGURATION", "agent_candidate_scan_enabled", True):
+            scan_min = max(5, self._cfg_int("CONFIGURATION", "agent_candidate_scan_interval_minutes", 60))
+            self.scheduler.add_job("agent_candidate_scan", scan_min * 60, self._run_candidate_scan)
+        if self._cfg_bool("CONFIGURATION", "agent_candidate_simulation_enabled", True):
+            sim_min = max(5, self._cfg_int("CONFIGURATION", "agent_candidate_simulation_interval_minutes", 60))
+            self.scheduler.add_job("agent_candidate_simulation", sim_min * 60, self._run_candidate_simulation)
+        if self._cfg_bool("CONFIGURATION", "agent_watchlist_policy_enabled", True):
+            wl_min = max(5, self._cfg_int("CONFIGURATION", "agent_watchlist_policy_interval_minutes", 60))
+            self.scheduler.add_job("agent_watchlist_policy_update", wl_min * 60, self._run_watchlist_policy_update)
+        if self._cfg_bool("CONFIGURATION", "agent_quick_backtest_enabled", True):
+            qb_min = max(5, self._cfg_int("CONFIGURATION", "agent_quick_backtest_interval_minutes", 1440))
+            self.scheduler.add_job("agent_quick_backtests", qb_min * 60, self._run_quick_backtests)
+        if self._cfg_bool("CONFIGURATION", "agent_full_backtest_enabled", False):
+            fb_min = max(15, self._cfg_int("CONFIGURATION", "agent_full_backtest_interval_minutes", 1440))
+            self.scheduler.add_job("agent_full_backtests", fb_min * 60, self._run_full_backtests)
         if self._cfg_bool("CONFIGURATION", "agent_daily_report_enabled", True):
             self.scheduler.add_job("agent_daily_report", 600, self._run_daily_report)
         if self._cfg_bool("CONFIGURATION", "agent_research_automation_enabled", True):
@@ -230,26 +250,52 @@ class AgentMaster:
         if threshold <= 0:
             return
 
+        warmup_minutes = max(0, self._cfg_int("CONFIGURATION", "agent_stale_quarantine_warmup_minutes", 45))
+        now_epoch = time.time()
+        started = float(getattr(self, "_agent_started_at", now_epoch) or now_epoch)
+        warmup_remaining = (warmup_minutes * 60.0) - max(0.0, now_epoch - started)
+        if warmup_remaining > 0:
+            self.metrics.log_metric(
+                "agent_stale_quarantine_warmup_remaining_seconds",
+                float(warmup_remaining),
+                {"warmup_minutes": int(warmup_minutes)},
+            )
+            return
+
         active = list(get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL") or [])
         if not active:
             return
 
         stale_syms = []
+        uninitialized_syms = []
         now = datetime.now(timezone.utc)
         for sym in active:
             try:
                 ts = self.db.get_last_timestamp(sym)
             except Exception:
                 ts = None
+
+            # v6.1.0: Missing history is UNINITIALIZED, not stale.
+            # Let auto-backfill hydrate symbols instead of collapsing ACTIVE on startup.
             if ts is None:
-                stale_syms.append(sym)
+                uninitialized_syms.append(sym)
                 continue
+
             try:
                 age = (now - ts).total_seconds()
             except Exception:
                 age = threshold + 1
             if age >= threshold:
                 stale_syms.append(sym)
+
+        if uninitialized_syms and self._cfg_bool("CONFIGURATION", "agent_auto_backfill_enabled", True):
+            self.log(
+                f"🧠 [AGENT] Detected {len(uninitialized_syms)} uninitialized symbol(s); skipping quarantine and triggering backfill check."
+            )
+            try:
+                self._run_auto_backfill()
+            except Exception:
+                pass
 
         moved = []
         for sym in stale_syms:
@@ -266,6 +312,356 @@ class AgentMaster:
                 details={"count": len(moved), "symbols": moved[:25]},
             )
             self.log(f"🧠 [AGENT] Quarantined {len(moved)} stale symbols to ARCHIVE watchlist.")
+
+    def _run_candidate_scan(self) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-scan-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(
+                run_id,
+                mode=str(self.mode),
+                phase="SCAN",
+                status="OK",
+                summary={"job": "agent_candidate_scan"},
+            )
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_candidate_scan", "rows": 0, "scan_id": ""}
+        try:
+            from .research.candidate_scanner import CandidateScanner
+
+            scanner = CandidateScanner(self.db, self.config, log=self._logger)
+            scan_id, rows = scanner.scan_today()
+            count = int(len(rows or []))
+            top_symbols = [str((r or {}).get("symbol", "")).upper() for r in (rows or [])[:10] if (r or {}).get("symbol")]
+            summary.update({"rows": count, "scan_id": str(scan_id), "top_symbols": top_symbols})
+
+            self.metrics.log_metric("agent_candidate_scan_rows", float(count), {"scan_id": str(scan_id), "mode": self.mode})
+            self.publish("candidate_scan_completed", {"scan_id": str(scan_id), "count": count, "symbols": top_symbols})
+
+            if count > 0:
+                self.log(f"🧠 [AGENT] Candidate scan complete: {count} row(s) (scan_id={scan_id}).")
+            else:
+                status = "SKIP"
+                self.log("🧠 [AGENT] Candidate scan produced no rows.")
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "CANDIDATE_SCAN_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
+
+    def _run_candidate_simulation(self, payload: Optional[Dict[str, Any]] = None) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-sim-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(
+                run_id,
+                mode=str(self.mode),
+                phase="SIM",
+                status="OK",
+                summary={"job": "agent_candidate_simulation"},
+            )
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_candidate_simulation", "input": 0, "scored": 0, "scan_id": ""}
+        try:
+            max_symbols = max(1, self._cfg_int("CONFIGURATION", "agent_candidate_simulation_max_symbols", 10))
+            latest = self.db.get_latest_candidates(limit=max_symbols) if hasattr(self.db, "get_latest_candidates") else []
+            rows = []
+            try:
+                if hasattr(latest, "to_dict"):
+                    rows = list(latest.to_dict("records"))
+                elif isinstance(latest, list):
+                    rows = list(latest)
+            except Exception:
+                rows = []
+
+            symbols = []
+            seen = set()
+            for r in rows:
+                sym = str((r or {}).get("symbol") or "").strip().upper()
+                if sym and sym not in seen:
+                    seen.add(sym)
+                    symbols.append(sym)
+                if len(symbols) >= max_symbols:
+                    break
+
+            summary["input"] = int(len(symbols))
+            if not symbols:
+                status = "SKIP"
+            else:
+                from .research.candidate_scanner import CandidateScanner
+
+                scanner = CandidateScanner(self.db, self.config, log=self._logger)
+                out = []
+                src_scan_id = str((payload or {}).get("scan_id") or "")
+                for sym in symbols:
+                    row = scanner.score_single_symbol(
+                        sym,
+                        universe="SIMULATION",
+                        extra_details={"source": "AGENT_SIMULATION", "source_scan_id": src_scan_id},
+                        force_accept=False,
+                    )
+                    if row:
+                        out.append(row)
+
+                sim_scan_id = f"SIM_{datetime.now(timezone.utc).strftime('%Y.%m.%d_%H.%M.%S')}"
+                summary["scan_id"] = sim_scan_id
+                summary["scored"] = int(len(out))
+                summary["symbols"] = symbols[:10]
+                if out:
+                    self.db.save_candidates(sim_scan_id, out, universe="SIMULATION", policy="AGENT_SIMULATION")
+                    self.metrics.log_metric("agent_candidate_simulation_rows", float(len(out)), {"scan_id": sim_scan_id, "mode": self.mode})
+                    self.publish("candidate_simulation_completed", {"scan_id": sim_scan_id, "count": len(out), "symbols": symbols[:10]})
+                    self.log(f"🧠 [AGENT] Candidate simulation complete: {len(out)} row(s) (scan_id={sim_scan_id}).")
+                else:
+                    status = "SKIP"
+                    self.log("🧠 [AGENT] Candidate simulation produced no rows.")
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "CANDIDATE_SIMULATION_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
+
+    def _run_watchlist_policy_update(self) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-select-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(run_id, mode=str(self.mode), phase="SELECT", status="OK", summary={"job": "agent_watchlist_policy_update"})
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_watchlist_policy_update"}
+        try:
+            before = list(get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL") or [])
+            res = apply_watchlist_policy(
+                self.config,
+                self.db,
+                getattr(self.db, "paths", {}) or {},
+                log=self.log,
+                source="agent_master",
+                apply_mode=(self._cfg_str("CONFIGURATION", "watchlist_auto_update_mode", "ADD") or "ADD").upper(),
+                write_cb=self._persist_split_config,
+            )
+            added = list(res.get("added") or [])
+            removed = list(res.get("removed") or [])
+            after = list(res.get("new_watchlist") or get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL") or [])
+            rejected = dict(res.get("rejected") or {})
+
+            max_churn = max(0, self._cfg_int("CONFIGURATION", "agent_watchlist_policy_max_churn_per_run", 10))
+            churn = len(added) + len(removed)
+            if max_churn > 0 and churn > max_churn:
+                status = "WARN"
+                self.metrics.log_anomaly(
+                    "WATCHLIST_POLICY_CHURN_EXCEEDED",
+                    severity="WARN",
+                    source="agent_maintenance",
+                    details={"churn": churn, "max_churn": max_churn},
+                )
+
+            self.publish("watchlist_policy_updated", {"added": added, "removed": removed, "rejected": rejected, "before": before, "after": after})
+            summary.update({"added": added, "removed": removed, "rejected_count": len(rejected), "before_count": len(before), "after_count": len(after), "batch_id": res.get("batch_id")})
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "WATCHLIST_POLICY_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
+
+    def _run_quick_backtests(self) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-backtest-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(run_id, mode=str(self.mode), phase="BACKTEST", status="OK", summary={"job": "agent_quick_backtests"})
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_quick_backtests", "symbols": 0, "ok": 0}
+        try:
+            max_symbols = max(1, self._cfg_int("CONFIGURATION", "agent_quick_backtest_max_symbols", 10))
+            bt_days = max(1, self._cfg_int("CONFIGURATION", "agent_quick_backtest_days", 14))
+            max_strats = max(1, self._cfg_int("CONFIGURATION", "agent_quick_backtest_max_strategies", 6))
+            min_trades = max(0, self._cfg_int("CONFIGURATION", "agent_quick_backtest_min_trades", 1))
+
+            latest = self.db.get_latest_candidates(limit=max_symbols) if hasattr(self.db, "get_latest_candidates") else []
+            rows = []
+            try:
+                if hasattr(latest, "to_dict"):
+                    rows = list(latest.to_dict("records"))
+                elif isinstance(latest, list):
+                    rows = list(latest)
+            except Exception:
+                rows = []
+
+            symbols = []
+            seen = set()
+            for r in rows:
+                sym = str((r or {}).get("symbol") or "").strip().upper()
+                if sym and sym not in seen:
+                    seen.add(sym)
+                    symbols.append(sym)
+                if len(symbols) >= max_symbols:
+                    break
+
+            summary["symbols"] = len(symbols)
+            if not symbols:
+                status = "SKIP"
+            else:
+                from .research.quick_backtest import run_quick_backtest
+
+                ok_count = 0
+                for sym in symbols:
+                    res = run_quick_backtest(
+                        self.config,
+                        self.db,
+                        sym,
+                        days=bt_days,
+                        max_strategies=max_strats,
+                        min_trades=min_trades,
+                    )
+                    best = (res or {}).get("best") or {}
+                    out = {
+                        "symbol": sym,
+                        "strategy": str(best.get("strategy") or "QUICK_BACKTEST"),
+                        "start_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "end_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "win_rate": float(best.get("win_rate") or 0.0),
+                        "total_profit": float(best.get("total_pl") or 0.0),
+                        "max_drawdown": float(best.get("max_drawdown") or 0.0),
+                        "sharpe_ratio": 0.0,
+                        "trade_count": int(best.get("trades") or 0),
+                        "best_params": "",
+                        "tested_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "results_json": json.dumps(res or {}),
+                    }
+                    self.db.save_backtest_result(out)
+                    if bool((res or {}).get("ok")):
+                        ok_count += 1
+
+                summary["ok"] = ok_count
+                self.metrics.log_metric("agent_quick_backtest_symbols", float(len(symbols)), {"ok": ok_count, "mode": self.mode})
+                self.publish("quick_backtests_completed", {"count": len(symbols), "ok": ok_count, "symbols": symbols[:10]})
+                self.log(f"🧠 [AGENT] Quick backtests complete: {ok_count}/{len(symbols)} ok.")
+                if ok_count == 0:
+                    status = "WARN"
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "QUICK_BACKTEST_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
+
+    def _run_full_backtests(self) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        now = datetime.now(timezone.utc)
+        day = now.strftime("%Y-%m-%d")
+        if day == self._last_full_backtest_date:
+            return
+
+        target_hour = self._cfg_int("CONFIGURATION", "agent_full_backtest_hour_utc", 2)
+        if int(now.hour) != int(target_hour):
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-full-backtest-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(run_id, mode=str(self.mode), phase="BACKTEST", status="OK", summary={"job": "agent_full_backtests"})
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_full_backtests"}
+        try:
+            service_res = run_full_backtest_service(
+                self.config,
+                self.db,
+                simulate_strategy=None,
+                log=self.log,
+                rebuild_table=True,
+                sleep_per_symbol_sec=0.0,
+            )
+            summary.update(service_res if isinstance(service_res, dict) else {})
+            if not bool((service_res or {}).get("ok")):
+                status = "WARN"
+            self._last_full_backtest_date = day
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "FULL_BACKTEST_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
 
     def _run_auto_backfill(self) -> None:
         if self.mode not in {"PAPER", "LIVE"}:
@@ -563,6 +959,20 @@ class AgentMaster:
             self._logger.exception("[E_AGENT_CFG_WRITE] Failed persisting split config")
 
     def _health_snapshot(self):
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-observe-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(
+                run_id,
+                mode=str(self.mode),
+                phase="OBSERVE",
+                status="OK",
+                summary={"job": "agent_health_snapshot"},
+            )
+        except Exception:
+            run_id = ""
+
         score = 1.0
         if self.mode == "OFF":
             score = 0.5
@@ -617,6 +1027,22 @@ class AgentMaster:
             slippage_bps=None,
             details={"mode": self.mode, "stale_threshold": stale_threshold},
         )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(
+                    run_id,
+                    status="OK",
+                    summary={
+                        "job": "agent_health_snapshot",
+                        "mode": self.mode,
+                        "freshness_seconds": freshness,
+                        "api_error_streak": api_err,
+                        "reject_ratio": reject_ratio,
+                    },
+                )
+            except Exception:
+                pass
 
     def _read_mode(self):
         try:
@@ -896,6 +1322,16 @@ class AgentMaster:
 
         if ev_type == "TRADINGVIEW_ALERT":
             self._on_tradingview_candidate(payload)
+            return
+
+        if ev_type == "candidate_scan_completed":
+            if self._cfg_bool("CONFIGURATION", "agent_candidate_simulation_run_after_scan", True):
+                self._run_candidate_simulation(payload)
+            return
+
+        if ev_type == "candidate_simulation_completed":
+            if self._cfg_bool("CONFIGURATION", "agent_watchlist_policy_run_after_simulation", True):
+                self._run_watchlist_policy_update()
             return
 
         if ev_type == "ACTION_REQUEST":

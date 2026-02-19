@@ -24,6 +24,7 @@ from .tabs.inspector import InspectorTab
 from .tabs.architect import ArchitectTab
 from .tabs.config import ConfigTab
 from .tabs.candidates import CandidatesTab
+from .research.full_backtest_service import run_full_backtest_service
 from .research.backtest_exporter import export_backtest_bundle
 from .research.watchlist_policy import apply_watchlist_policy
 
@@ -1440,48 +1441,15 @@ class TradingApp(ctk.CTk):
 
     def run_full_backtest(self):
         self.log("Starting Backtest...")
-        strategies = [s.replace("STRATEGY_", "") for s in self.config.sections() if s.startswith("STRATEGY_")]
-        self.db_manager.rebuild_backtest_table(strategies)
-        
-        symbols = self.db_manager.get_all_symbols()
-        count = 0
-        
-        for sym in symbols:
-            df = self.db_manager.get_history(sym, 5000)
-            res = {"symbol": sym}
-            
-            best_strat = "None"
-            best_profit = -999999.0
-            
-            for s in strategies:
-                try:
-                    if not df.empty:
-                        pl, trades = self.simulate_strategy_numpy(df, s, sym)
-                        res[f"PL_{s}"] = round(pl, 2)
-                        res[f"Trades_{s}"] = trades
-                        
-                        if pl > best_profit:
-                            best_profit = pl
-                            best_strat = s
-                    else:
-                        res[f"PL_{s}"] = 0.0
-                        res[f"Trades_{s}"] = 0
-                except:
-                    res[f"PL_{s}"] = 0.0
-                    res[f"Trades_{s}"] = 0
-
-            res["best_strategy"] = best_strat
-            res["best_profit"] = round(best_profit, 2) if best_profit != -999999.0 else 0.0
-            res["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            time.sleep(0.05) 
-            self.db_manager.save_backtest_result(res)
-            count += 1
-            if count % 5 == 0:
-                self.log(f"Backtesting... {count}/{len(symbols)}")
-                
+        run_full_backtest_service(
+            self.config,
+            self.db_manager,
+            simulate_strategy=self.simulate_strategy_numpy,
+            log=self.log,
+            rebuild_table=True,
+            sleep_per_symbol_sec=0.05,
+        )
         self.call_ui(self.refresh_backtest_ui)
-        self.log("✅ Backtest Complete.")
 
     def refresh_backtest_ui(self):
         # Update Cache

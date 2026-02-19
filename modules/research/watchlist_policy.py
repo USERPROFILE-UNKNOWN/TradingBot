@@ -332,6 +332,17 @@ def apply_watchlist_policy(
     except Exception:
         existing_list = []
 
+    # Preserve order, de-dup + keep simple rejection reasons for policy transparency.
+    reject_reasons: Dict[str, List[str]] = {}
+
+    def _reject(sym: str, reason: str) -> None:
+        ss = str(sym or "").strip().upper()
+        if not ss:
+            return
+        arr = reject_reasons.setdefault(ss, [])
+        if reason not in arr:
+            arr.append(reason)
+
     # Candidate-driven selection (for non-crypto)
     candidate_syms: List[str] = []
     try:
@@ -346,8 +357,10 @@ def apply_watchlist_policy(
                     if not sym:
                         continue
                     if score < float(min_score):
+                        _reject(sym, "score_below_min")
                         continue
                     if _is_crypto_symbol(sym):
+                        _reject(sym, "crypto_managed_separately")
                         continue
                     candidate_syms.append(sym)
             except Exception:
@@ -355,11 +368,11 @@ def apply_watchlist_policy(
     except Exception:
         pass
 
-    # Preserve order, de-dup
     seen = set()
     cand_unique: List[str] = []
     for s in candidate_syms:
         if s in seen:
+            _reject(s, "duplicate_candidate")
             continue
         seen.add(s)
         cand_unique.append(s)
@@ -380,12 +393,14 @@ def apply_watchlist_policy(
             existing_set = set(new_non_crypto)
             for s in cand_unique:
                 if s in existing_set:
+                    _reject(s, "already_active")
+                    continue
+                if max_add > 0 and added_count >= max_add:
+                    _reject(s, "max_add_limit")
                     continue
                 new_non_crypto.append(s)
                 existing_set.add(s)
                 added_count += 1
-                if max_add > 0 and added_count >= max_add:
-                    break
 
     # Crypto stable set
     crypto_meta: Dict[str, Any] = {}
@@ -419,6 +434,9 @@ def apply_watchlist_policy(
                 crypto_syms = crypto_syms[:max_total]
                 new_non_crypto = []
             else:
+                if len(new_non_crypto) > room:
+                    for d in new_non_crypto[room:]:
+                        _reject(d, "max_total_limit")
                 new_non_crypto = new_non_crypto[:room]
         else:
             # truncate combined
@@ -428,6 +446,8 @@ def apply_watchlist_policy(
 
     # If max_total still exceeded (non-crypto only case)
     if max_total > 0 and len(new_list) > max_total:
+        for d in new_list[max_total:]:
+            _reject(d, "max_total_limit")
         new_list = new_list[:max_total]
 
     # Compute deltas
@@ -442,6 +462,7 @@ def apply_watchlist_policy(
             "reason": "no changes",
             "batch_id": batch_id,
             "new_watchlist": new_list,
+            "rejected": reject_reasons,
         }
 
     # Backup first
@@ -535,6 +556,7 @@ def apply_watchlist_policy(
                 "after": new_list,
                 "added": added,
                 "removed": removed,
+                "rejected": reject_reasons,
             }
             with open(out_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -570,5 +592,6 @@ def apply_watchlist_policy(
         "new_watchlist": new_list,
         "added": added,
         "removed": removed,
+        "rejected": reject_reasons,
         "crypto_meta": crypto_meta,
     }

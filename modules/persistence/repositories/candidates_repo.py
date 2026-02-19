@@ -43,7 +43,7 @@ class CandidatesRepo(RepoBase):
 
 
 
-    def save_candidates(self, scan_id: str, rows: list, universe: str, policy: str, scan_ts: str = None) -> int:
+    def save_candidates(self, scan_id: str, rows: list, universe: str = "AUTO", policy: str = "AUTO", scan_ts: str = None) -> int:
         conn = self._conn("decision_logs")
         lock = self._lock("decision_logs")
         if not rows:
@@ -72,7 +72,7 @@ class CandidatesRepo(RepoBase):
                             (
                                 str(scan_id),
                                 scan_ts,
-                                str(universe),
+                                str((r or {}).get('universe') or universe or "AUTO"),
                                 str(policy),
                                 str(r.get('symbol', '')).upper(),
                                 float(r.get('score', 0.0)),

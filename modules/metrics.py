@@ -72,6 +72,31 @@ class MetricsStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_job_runs_name ON job_runs(job_name)")
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS job_run_state (
+                    job_name TEXT PRIMARY KEY,
+                    last_success_at INTEGER,
+                    last_attempt_at INTEGER,
+                    cooldown_until INTEGER,
+                    last_error TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS autopilot_runs (
+                    run_id TEXT PRIMARY KEY,
+                    started_at INTEGER NOT NULL,
+                    ended_at INTEGER,
+                    mode TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    summary_json TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_autopilot_runs_started_at ON autopilot_runs(started_at)")
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS anomalies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ts INTEGER NOT NULL,
@@ -178,6 +203,68 @@ class MetricsStore:
                     (int(duration_ms) if duration_ms is not None else None),
                     json.dumps(details or {}),
                 ),
+            )
+            conn.commit()
+
+    def get_job_state(self, job_name: str) -> Dict[str, Any]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT last_success_at, last_attempt_at, cooldown_until, last_error FROM job_run_state WHERE job_name = ?",
+                (str(job_name),),
+            ).fetchone()
+        if not row:
+            return {}
+        return {
+            "last_success_at": (int(row[0]) if row[0] is not None else None),
+            "last_attempt_at": (int(row[1]) if row[1] is not None else None),
+            "cooldown_until": (int(row[2]) if row[2] is not None else None),
+            "last_error": (str(row[3]) if row[3] is not None else ""),
+        }
+
+    def update_job_state(self, job_name: str, status: str, *, error: str = "", cooldown_until: int | None = None) -> None:
+        now_ts = int(time.time())
+        ok = str(status).strip().lower() == "ok"
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO job_run_state(job_name, last_success_at, last_attempt_at, cooldown_until, last_error)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(job_name) DO UPDATE SET
+                    last_success_at=excluded.last_success_at,
+                    last_attempt_at=excluded.last_attempt_at,
+                    cooldown_until=excluded.cooldown_until,
+                    last_error=excluded.last_error
+                """,
+                (
+                    str(job_name),
+                    (now_ts if ok else None),
+                    now_ts,
+                    (int(cooldown_until) if cooldown_until is not None else None),
+                    ("" if ok else str(error or "")),
+                ),
+            )
+            conn.commit()
+
+    def start_autopilot_run(self, run_id: str, mode: str, phase: str, status: str = "OK", summary: dict | None = None) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO autopilot_runs(run_id, started_at, ended_at, mode, phase, status, summary_json)
+                VALUES (?, ?, NULL, ?, ?, ?, ?)
+                """,
+                (str(run_id), int(time.time()), str(mode), str(phase), str(status), json.dumps(summary or {})),
+            )
+            conn.commit()
+
+    def finish_autopilot_run(self, run_id: str, status: str = "OK", summary: dict | None = None) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE autopilot_runs
+                   SET ended_at = ?, status = ?, summary_json = ?
+                 WHERE run_id = ?
+                """,
+                (int(time.time()), str(status), json.dumps(summary or {}), str(run_id)),
             )
             conn.commit()
 

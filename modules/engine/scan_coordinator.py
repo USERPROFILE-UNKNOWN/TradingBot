@@ -31,16 +31,20 @@ class ScanCoordinatorService:
             setattr(self._engine, name, value)
 
     def scan_market_parallel(self):
-        if 'WATCHLIST' not in self.config:
+        symbols = self._resolve_scan_symbols()
+
+        if not symbols:
+            self._emit(
+                "🔎 Scan skipped: no symbols available from watchlist/candidates.",
+                level="WARN",
+                category="SCAN",
+                throttle_key="scan_no_symbols",
+                throttle_sec=60,
+            )
             return
 
         # v3.8: Shapeshifter Logic
         # Select Watchlist (Phase 4 v5.14.0: ACTIVE universe)
-        try:
-            from ..watchlist_api import get_watchlist_symbols
-            symbols = list(get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL"))
-        except Exception:
-            symbols = []
 
         opportunities = []
         scan_started = time.time()
@@ -145,3 +149,53 @@ class ScanCoordinatorService:
                 throttle_key="scan_summary",
                 throttle_sec=30
             )
+
+    def _resolve_scan_symbols(self):
+        """Resolve scan symbols without relying on legacy [WATCHLIST] config sections.
+
+        Resolution order:
+          1) ACTIVE watchlist symbols (primary source of truth).
+          2) ALL watchlist symbols (fallback when ACTIVE is empty).
+          3) Latest DB candidates (bootstrap fallback).
+        """
+
+        def _uniq(items):
+            out, seen = [], set()
+            for raw in items or []:
+                try:
+                    sym = str(raw or "").strip().upper()
+                except Exception:
+                    continue
+                if not sym or sym in seen:
+                    continue
+                seen.add(sym)
+                out.append(sym)
+            return out
+
+        try:
+            from ..watchlist_api import get_watchlist_symbols
+            active = _uniq(get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL"))
+        except Exception:
+            active = []
+
+        if active:
+            return active
+
+        try:
+            from ..watchlist_api import get_watchlist_symbols
+            all_symbols = _uniq(get_watchlist_symbols(self.config, group="ALL", asset="ALL"))
+        except Exception:
+            all_symbols = []
+
+        if all_symbols:
+            return all_symbols
+
+        db = getattr(self, "db", None)
+        if db is None or not hasattr(db, "get_latest_candidates"):
+            return []
+
+        try:
+            rows = db.get_latest_candidates(limit=200) or []
+            return _uniq((r or {}).get("symbol") for r in rows)
+        except Exception:
+            return []

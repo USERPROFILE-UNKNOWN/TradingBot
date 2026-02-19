@@ -2,7 +2,7 @@
 setlocal enableextensions enabledelayedexpansion
 
 REM ============================================================================
-REM TradingBot v5.20.0
+REM TradingBot v6.7.0
 REM Forward-only cleanup: remove legacy/compat artifacts + Python bytecode caches
 REM ============================================================================
 REM Safe to run multiple times.

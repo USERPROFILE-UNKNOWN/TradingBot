@@ -18,10 +18,20 @@ class JobScheduler:
     def add_job(self, name: str, interval_sec: int, func: Callable[[], None]) -> None:
         if not name or interval_sec <= 0 or not callable(func):
             return
+        next_run = time.time() + int(interval_sec)
+        try:
+            if self.metrics is not None and hasattr(self.metrics, "get_job_state"):
+                st = self.metrics.get_job_state(name) or {}
+                cool = st.get("cooldown_until")
+                if cool is not None:
+                    next_run = max(float(next_run), float(cool))
+        except Exception:
+            pass
+
         self._jobs[name] = {
             "interval": int(interval_sec),
             "func": func,
-            "next_run": time.time() + int(interval_sec),
+            "next_run": float(next_run),
         }
 
     def start(self) -> None:
@@ -57,6 +67,8 @@ class JobScheduler:
                     try:
                         if self.metrics is not None:
                             self.metrics.log_job_run(name, status, dur_ms, {"error": err} if err else {})
+                            if hasattr(self.metrics, "update_job_state"):
+                                self.metrics.update_job_state(name, status, error=err)
                     except Exception:
                         pass
                     job["next_run"] = time.time() + int(job.get("interval", 60))

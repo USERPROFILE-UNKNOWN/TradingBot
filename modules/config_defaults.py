@@ -1,4 +1,4 @@
-"""Canonical split-config defaults (v5.20.0).
+"""Canonical split-config defaults (v6.7.0).
 
 This module is the single source of truth for default values used to:
 - Create missing config/*.ini files (fresh install)
@@ -20,12 +20,32 @@ CONFIGURATION_DEFAULTS: Dict[str, str] = {
     "agent_max_live_changes_per_day": "8",
     "agent_mode": "OFF",
     "agent_auto_backfill_enabled": "True",
+    "agent_candidate_scan_enabled": "True",
+    "agent_candidate_scan_interval_minutes": "60",
+    "agent_candidate_simulation_enabled": "True",
+    "agent_candidate_simulation_interval_minutes": "60",
+    "agent_candidate_simulation_max_symbols": "10",
+    "agent_candidate_simulation_run_after_scan": "True",
+    "agent_watchlist_policy_enabled": "True",
+    "agent_watchlist_policy_interval_minutes": "60",
+    "agent_watchlist_policy_max_churn_per_run": "10",
+    "agent_watchlist_policy_run_after_simulation": "True",
+    "agent_quick_backtest_enabled": "True",
+    "agent_quick_backtest_interval_minutes": "1440",
+    "agent_quick_backtest_max_symbols": "10",
+    "agent_quick_backtest_days": "14",
+    "agent_quick_backtest_max_strategies": "6",
+    "agent_quick_backtest_min_trades": "1",
+    "agent_full_backtest_enabled": "False",
+    "agent_full_backtest_interval_minutes": "1440",
+    "agent_full_backtest_hour_utc": "2",
     "agent_backfill_min_interval_minutes": "240",
     "agent_daily_report_enabled": "True",
     "agent_daily_report_hour_utc": "0",
     "agent_db_integrity_check_enabled": "True",
     "agent_stale_quarantine_enabled": "True",
     "agent_stale_quarantine_threshold_seconds": "21600",
+    "agent_stale_quarantine_warmup_minutes": "45",
     "agent_research_automation_enabled": "True",
     "agent_research_sweep_hour_utc": "1",
     "agent_research_max_symbols": "10",

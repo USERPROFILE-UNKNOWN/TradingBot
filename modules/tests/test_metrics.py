@@ -23,3 +23,33 @@ def test_metrics_store_v5170_health_tables_and_snapshot(tmp_path):
     assert snap["decision_exec_latency_ms"] == 250.0
     assert snap["slippage_bps"] == 1.2
     assert snap["anomaly_count"] >= 1
+
+
+def test_metrics_store_v620_autopilot_and_job_state(tmp_path):
+    store = MetricsStore(str(tmp_path))
+
+    store.update_job_state("agent_health_snapshot", "ok")
+    st = store.get_job_state("agent_health_snapshot")
+    assert st.get("last_attempt_at") is not None
+    assert st.get("last_success_at") is not None
+    assert st.get("last_error") == ""
+
+    store.update_job_state("agent_health_snapshot", "error", error="boom", cooldown_until=999)
+    st2 = store.get_job_state("agent_health_snapshot")
+    assert st2.get("last_attempt_at") is not None
+    assert st2.get("last_error") == "boom"
+    assert st2.get("cooldown_until") == 999
+
+    store.start_autopilot_run("r1", mode="PAPER", phase="SCAN", status="OK", summary={"a": 1})
+    store.finish_autopilot_run("r1", status="WARN", summary={"b": 2})
+
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT mode, phase, status, ended_at FROM autopilot_runs WHERE run_id = ?",
+            ("r1",),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "PAPER"
+    assert row[1] == "SCAN"
+    assert row[2] == "WARN"
+    assert row[3] is not None
