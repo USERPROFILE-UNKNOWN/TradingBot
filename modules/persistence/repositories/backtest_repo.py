@@ -109,6 +109,57 @@ class BacktestRepo(RepoBase):
         """
         self.ensure_backtest_table()
 
+    @staticmethod
+    def _pandas_available() -> bool:
+        return hasattr(pd, "read_sql_query") and hasattr(pd, "DataFrame")
+
+    class _MiniRow(dict):
+        def to_dict(self):
+            return dict(self)
+
+    class _MiniILoc:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def __getitem__(self, index):
+            return BacktestRepo._MiniRow(self._rows[index])
+
+    class _MiniDataFrame:
+        def __init__(self, rows):
+            self._rows = list(rows or [])
+            self.iloc = BacktestRepo._MiniILoc(self._rows)
+
+        @property
+        def empty(self):
+            return len(self._rows) == 0
+
+        @property
+        def columns(self):
+            if not self._rows:
+                return []
+            return list(self._rows[0].keys())
+
+    def _empty_df(self):
+        if self._pandas_available():
+            return pd.DataFrame()
+        return BacktestRepo._MiniDataFrame([])
+
+    def _read_sql_query(self, query: str, conn, params=None):
+        if self._pandas_available():
+            if params is None:
+                return pd.read_sql_query(query, conn)
+            return pd.read_sql_query(query, conn, params=params)
+
+        cur = conn.cursor()
+        if params is None:
+            cur.execute(query)
+        else:
+            cur.execute(query, params)
+        rows = cur.fetchall()
+        cols = [d[0] for d in (cur.description or [])]
+        as_dicts = [dict(zip(cols, row)) for row in rows]
+        return BacktestRepo._MiniDataFrame(as_dicts)
+
 
     def save_backtest_result(self, data_dict):
         try:
@@ -181,7 +232,7 @@ class BacktestRepo(RepoBase):
             try:
                 if symbol:
                     try:
-                        return pd.read_sql_query(
+                        return self._read_sql_query(
                             "SELECT * FROM backtest_results WHERE symbol=? ORDER BY tested_at DESC",
                             conn,
                             params=(symbol.upper(),),
@@ -189,34 +240,34 @@ class BacktestRepo(RepoBase):
                     except Exception:
                         # Older DBs may not have tested_at.
                         try:
-                            return pd.read_sql_query(
+                            return self._read_sql_query(
                                 "SELECT * FROM backtest_results WHERE symbol=? ORDER BY timestamp DESC",
                                 conn,
                                 params=(symbol.upper(),),
                             )
                         except Exception:
-                            return pd.read_sql_query(
+                            return self._read_sql_query(
                                 "SELECT * FROM backtest_results WHERE symbol=?",
                                 conn,
                                 params=(symbol.upper(),),
                             )
                 else:
                     try:
-                        return pd.read_sql_query("SELECT * FROM backtest_results ORDER BY tested_at DESC", conn)
+                        return self._read_sql_query("SELECT * FROM backtest_results ORDER BY tested_at DESC", conn)
                     except Exception:
                         try:
-                            return pd.read_sql_query("SELECT * FROM backtest_results ORDER BY timestamp DESC", conn)
+                            return self._read_sql_query("SELECT * FROM backtest_results ORDER BY timestamp DESC", conn)
                         except Exception:
-                            return pd.read_sql_query("SELECT * FROM backtest_results", conn)
+                            return self._read_sql_query("SELECT * FROM backtest_results", conn)
             except Exception:
-                return pd.DataFrame()
+                return self._empty_df()
 
     def get_best_strategy_for_symbol(self, symbol: str):
         conn = self._conn("backtest_results")
         lock = self._lock("backtest_results")
         with lock:
             try:
-                df = pd.read_sql_query(
+                df = self._read_sql_query(
                     """
                     SELECT strategy, win_rate, total_profit, max_drawdown, sharpe_ratio
                     FROM backtest_results
