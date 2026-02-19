@@ -1,4 +1,4 @@
-"""Canonical split-config defaults (v6.7.0).
+"""Canonical split-config defaults (v6.15.0).
 
 This module is the single source of truth for default values used to:
 - Create missing config/*.ini files (fresh install)
@@ -36,6 +36,15 @@ CONFIGURATION_DEFAULTS: Dict[str, str] = {
     "agent_quick_backtest_days": "14",
     "agent_quick_backtest_max_strategies": "6",
     "agent_quick_backtest_min_trades": "1",
+    "agent_architect_optimize_enabled": "True",
+    "agent_architect_optimize_interval_minutes": "10080",
+    "agent_architect_optimize_max_symbols": "5",
+    "agent_architect_optimize_top_variants_per_symbol": "3",
+    "agent_architect_orchestrator_enabled": "True",
+    "agent_architect_orchestrator_interval_minutes": "10080",
+    "agent_architect_orchestrator_hour_utc": "3",
+    "agent_architect_orchestrator_max_queue_items": "10",
+    "agent_architect_orchestrator_max_symbols": "25",
     "agent_full_backtest_enabled": "False",
     "agent_full_backtest_interval_minutes": "1440",
     "agent_full_backtest_hour_utc": "2",

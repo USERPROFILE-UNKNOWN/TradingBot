@@ -83,7 +83,9 @@ class TradingApp(ctk.CTk):
         self.sort_descending = True # Toggle state
         
 
-        # v5.13.0 updateB: queue of Architect variants for orchestrated backtests
+        # v6.8.0: queue of Architect variants for orchestrated backtests
+        # Primary store is DB-backed (decision_logs.architect_queue) via DataManager.
+        # Keep in-memory list as a compatibility fallback only.
         self._architect_queue = []
         self._architect_queue_counter = 0
 
@@ -565,12 +567,21 @@ class TradingApp(ctk.CTk):
     # --- Architect queue API (v5.13.0 updateB) ---
     def get_architect_queue(self):
         try:
+            if hasattr(self.db_manager, 'architect_queue_list'):
+                rows = self.db_manager.architect_queue_list(statuses=['NEW', 'RUNNING', 'DONE', 'FAILED'], limit=1000)
+                if isinstance(rows, list):
+                    return rows
+        except Exception:
+            pass
+        try:
             return list(self._architect_queue)
         except Exception:
             return []
 
     def clear_architect_queue(self):
         try:
+            if hasattr(self.db_manager, 'architect_queue_clear'):
+                self.db_manager.architect_queue_clear()
             self._architect_queue = []
             self._architect_queue_counter = 0
             self.log("[ARCH_QUEUE] Cleared.")
@@ -599,8 +610,21 @@ class TradingApp(ctk.CTk):
             except Exception:
                 pass
 
-            self._architect_queue_counter += 1
-            item_id = f"ARCH{self._architect_queue_counter:03d}"
+            item_id = ""
+            metrics = {}
+            for k in ('profit', 'trades', 'win_rate', 'score'):
+                try:
+                    if variant_dict and k in variant_dict:
+                        metrics[k] = variant_dict.get(k)
+                except Exception:
+                    pass
+
+            if hasattr(self.db_manager, 'architect_queue_enqueue'):
+                item_id = self.db_manager.architect_queue_enqueue(source_symbol, genome, metrics=metrics)
+
+            if not item_id:
+                self._architect_queue_counter += 1
+                item_id = f"ARCH{self._architect_queue_counter:03d}"
 
             item = {
                 'id': item_id,
@@ -609,12 +633,7 @@ class TradingApp(ctk.CTk):
                 'genome': genome,
             }
 
-            for k in ('profit', 'trades', 'win_rate', 'score'):
-                try:
-                    if variant_dict and k in variant_dict:
-                        item[k] = variant_dict.get(k)
-                except Exception:
-                    pass
+            item.update(metrics)
 
             self._architect_queue.append(item)
             self.log(f"[ARCH_QUEUE] Added {item_id} from {item['source_symbol']} | {genome}")

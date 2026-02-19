@@ -136,6 +136,12 @@ class AgentMaster:
                 self.metrics.log_agent_action(self.mode, action_type, False, "Hard halt active", action)
                 return False, "Hard halt active"
 
+        if self.mode == "LIVE" and action_type == "DEPLOY_STRATEGY":
+            gates_ok, gate_reason = self._check_live_promotion_gates(action)
+            if not gates_ok:
+                self.metrics.log_agent_action(self.mode, action_type, False, gate_reason, action)
+                return False, gate_reason
+
         approved, reason = self.gov.approve_action(action)
         if approved and self.mode == "LIVE":
             day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -160,6 +166,59 @@ class AgentMaster:
         self.metrics.log_agent_action(self.mode, action_type, approved, reason, action)
         return approved, reason
 
+    def _check_live_promotion_gates(self, action: dict) -> tuple[bool, str]:
+        """Hard-stop promotion gates for LIVE deploy actions."""
+        if not self._cfg_bool("CONFIGURATION", "promotion_enabled", True):
+            return False, "Promotion disabled"
+
+        stats = {}
+        try:
+            stats = dict(action.get("promotion_stats") or {})
+        except Exception:
+            stats = {}
+
+        def _num(key: str, default: float = 0.0) -> float:
+            try:
+                if key in action and action.get(key) is not None:
+                    return float(action.get(key))
+                return float(stats.get(key, default))
+            except Exception:
+                return float(default)
+
+        sessions = int(_num("paper_sessions", 0))
+        trades = int(_num("paper_trades_total", 0))
+        drawdown_pct = _num("drawdown_pct", 100.0)
+        cancel_rate_pct = _num("cancel_rate_pct", 100.0)
+        reject_rate_pct = _num("reject_rate_pct", 100.0)
+        watchdog_halts = int(_num("watchdog_halts", 0))
+        stale_symbols = int(_num("stale_symbols", 0))
+
+        min_sessions = self._cfg_int("CONFIGURATION", "promotion_min_sessions", 5)
+        min_trades = self._cfg_int("CONFIGURATION", "promotion_min_trades_total", 30)
+        max_drawdown = self._cfg_float("CONFIGURATION", "promotion_max_drawdown_pct", 4.0)
+        max_cancel = self._cfg_float("CONFIGURATION", "promotion_max_cancel_rate_pct", 35.0)
+        max_reject = self._cfg_float("CONFIGURATION", "promotion_max_reject_rate_pct", 10.0)
+
+        if sessions < min_sessions:
+            return False, f"Promotion gate failed: sessions {sessions} < {min_sessions}"
+        if trades < min_trades:
+            return False, f"Promotion gate failed: trades {trades} < {min_trades}"
+        if drawdown_pct > max_drawdown:
+            return False, f"Promotion gate failed: drawdown {drawdown_pct:.2f}% > {max_drawdown:.2f}%"
+        if cancel_rate_pct > max_cancel:
+            return False, f"Promotion gate failed: cancel rate {cancel_rate_pct:.2f}% > {max_cancel:.2f}%"
+        if reject_rate_pct > max_reject:
+            return False, f"Promotion gate failed: reject rate {reject_rate_pct:.2f}% > {max_reject:.2f}%"
+
+        if self._cfg_bool("CONFIGURATION", "promotion_require_no_watchdog_halts", True) and watchdog_halts > 0:
+            return False, "Promotion gate failed: watchdog halts present"
+        if self._cfg_bool("CONFIGURATION", "promotion_require_no_stale_symbols", True) and stale_symbols > 0:
+            return False, "Promotion gate failed: stale symbols present"
+        if self._cfg_bool("CONFIGURATION", "agent_hard_halt_supreme", True) and bool(getattr(self, "_hard_halt_active", False)):
+            return False, "Promotion gate failed: hard halt active"
+
+        return True, "Promotion gates passed"
+
     def _register_jobs(self):
         self.scheduler.add_job("agent_health_snapshot", 60, self._health_snapshot)
         if self._cfg_bool("CONFIGURATION", "agent_db_integrity_check_enabled", True):
@@ -180,6 +239,12 @@ class AgentMaster:
         if self._cfg_bool("CONFIGURATION", "agent_quick_backtest_enabled", True):
             qb_min = max(5, self._cfg_int("CONFIGURATION", "agent_quick_backtest_interval_minutes", 1440))
             self.scheduler.add_job("agent_quick_backtests", qb_min * 60, self._run_quick_backtests)
+        if self._cfg_bool("CONFIGURATION", "agent_architect_optimize_enabled", True):
+            ao_min = max(15, self._cfg_int("CONFIGURATION", "agent_architect_optimize_interval_minutes", 10080))
+            self.scheduler.add_job("agent_architect_optimize", ao_min * 60, self._run_architect_optimize)
+        if self._cfg_bool("CONFIGURATION", "agent_architect_orchestrator_enabled", True):
+            orch_min = max(15, self._cfg_int("CONFIGURATION", "agent_architect_orchestrator_interval_minutes", 10080))
+            self.scheduler.add_job("agent_architect_orchestrator", orch_min * 60, self._run_architect_orchestrator)
         if self._cfg_bool("CONFIGURATION", "agent_full_backtest_enabled", False):
             fb_min = max(15, self._cfg_int("CONFIGURATION", "agent_full_backtest_interval_minutes", 1440))
             self.scheduler.add_job("agent_full_backtests", fb_min * 60, self._run_full_backtests)
@@ -600,6 +665,262 @@ class AgentMaster:
             summary["error"] = str(e)
             self.metrics.log_anomaly(
                 "QUICK_BACKTEST_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
+
+    def _run_architect_optimize(self) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-architect-opt-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(run_id, mode=str(self.mode), phase="SELECT", status="OK", summary={"job": "agent_architect_optimize"})
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_architect_optimize", "symbols": 0, "queued": 0}
+        try:
+            max_symbols = max(1, self._cfg_int("CONFIGURATION", "agent_architect_optimize_max_symbols", 5))
+            top_k = max(1, self._cfg_int("CONFIGURATION", "agent_architect_optimize_top_variants_per_symbol", 3))
+
+            latest = self.db.get_latest_candidates(limit=max_symbols) if hasattr(self.db, "get_latest_candidates") else []
+            rows = []
+            try:
+                if hasattr(latest, "to_dict"):
+                    rows = list(latest.to_dict("records"))
+                elif isinstance(latest, list):
+                    rows = list(latest)
+            except Exception:
+                rows = []
+
+            symbols = []
+            seen = set()
+            for r in rows:
+                sym = str((r or {}).get("symbol") or "").strip().upper()
+                if sym and sym not in seen:
+                    seen.add(sym)
+                    symbols.append(sym)
+                if len(symbols) >= max_symbols:
+                    break
+
+            summary["symbols"] = len(symbols)
+            if not symbols:
+                status = "SKIP"
+            elif not hasattr(self.db, "architect_queue_enqueue"):
+                status = "WARN"
+                summary["warning"] = "architect_queue_enqueue_unavailable"
+            else:
+                from .architect import TheArchitect
+
+                optimizer = TheArchitect(self.db, config=self.config)
+                queued = 0
+                for sym in symbols:
+                    try:
+                        variants = optimizer.run_optimization(sym, lambda *_a, **_k: None) or []
+                    except Exception:
+                        variants = []
+                    if not variants:
+                        continue
+
+                    variants = sorted(
+                        variants,
+                        key=lambda v: float((v or {}).get("score", (v or {}).get("profit", 0.0)) or 0.0),
+                        reverse=True,
+                    )
+
+                    local_seen = set()
+                    for variant in variants:
+                        genome = {
+                            "rsi": (variant or {}).get("rsi"),
+                            "sl": (variant or {}).get("sl"),
+                            "tp": (variant or {}).get("tp"),
+                            "ema": bool((variant or {}).get("ema")),
+                        }
+                        gkey = (genome["rsi"], genome["sl"], genome["tp"], genome["ema"])
+                        if gkey in local_seen:
+                            continue
+                        local_seen.add(gkey)
+
+                        metrics = {
+                            "profit": (variant or {}).get("profit"),
+                            "trades": (variant or {}).get("trades"),
+                            "win_rate": (variant or {}).get("win_rate"),
+                            "score": (variant or {}).get("score"),
+                        }
+                        item_id = self.db.architect_queue_enqueue(sym, genome, metrics=metrics)
+                        if item_id:
+                            queued += 1
+                        if len(local_seen) >= top_k:
+                            break
+
+                summary["queued"] = queued
+                self.metrics.log_metric("agent_architect_optimize_queued", float(queued), {"symbols": len(symbols), "mode": self.mode})
+                self.publish("architect_optimize_completed", {"symbols": symbols[:10], "queued": queued})
+                self.log(f"🧠 [AGENT] Architect optimize complete: queued {queued} variants across {len(symbols)} symbols.")
+                if queued == 0:
+                    status = "WARN"
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "ARCHITECT_OPTIMIZE_FAIL",
+                severity="WARN",
+                source="agent_maintenance",
+                details={"error": str(e)},
+            )
+
+        if run_id:
+            try:
+                self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+            except Exception:
+                pass
+
+    def _run_architect_orchestrator(self) -> None:
+        if self.mode not in {"PAPER", "LIVE"}:
+            return
+
+        run_id = ""
+        try:
+            self._autopilot_seq = int(getattr(self, "_autopilot_seq", 0) or 0) + 1
+            run_id = f"{int(time.time())}-architect-orch-{self._autopilot_seq}"
+            self.metrics.start_autopilot_run(run_id, mode=str(self.mode), phase="DEPLOY", status="OK", summary={"job": "agent_architect_orchestrator"})
+        except Exception:
+            run_id = ""
+
+        status = "OK"
+        summary = {"job": "agent_architect_orchestrator", "queue_items": 0, "symbols": 0, "processed": 0}
+        try:
+            target_hour = self._cfg_int("CONFIGURATION", "agent_architect_orchestrator_hour_utc", 3)
+            now = datetime.now(timezone.utc)
+            if int(now.hour) != int(target_hour):
+                status = "SKIP"
+                summary["reason"] = "off_hours_gate"
+            elif not hasattr(self.db, "architect_queue_list"):
+                status = "WARN"
+                summary["warning"] = "architect_queue_list_unavailable"
+            else:
+                max_queue = max(1, self._cfg_int("CONFIGURATION", "agent_architect_orchestrator_max_queue_items", 10))
+                max_symbols = max(1, self._cfg_int("CONFIGURATION", "agent_architect_orchestrator_max_symbols", 25))
+
+                queue_items = self.db.architect_queue_list(statuses=["NEW"], limit=max_queue)
+                summary["queue_items"] = len(queue_items)
+                if not queue_items:
+                    status = "SKIP"
+                    summary["reason"] = "queue_empty"
+                else:
+                    from .backtest_runner import normalize_variants, run_architect_queue_backtest
+                    from .research.architect_backtest_exporter import export_architect_backtest_bundle
+                    from .utils import APP_VERSION, APP_RELEASE
+
+                    variants = normalize_variants(queue_items)
+                    for item in queue_items:
+                        try:
+                            if hasattr(self.db, "architect_queue_mark_status"):
+                                self.db.architect_queue_mark_status(item.get("id"), "RUNNING")
+                        except Exception:
+                            pass
+
+                    symbols = []
+                    try:
+                        symbols = get_watchlist_symbols(self.config, group="ACTIVE") or []
+                    except Exception:
+                        symbols = []
+                    if not symbols and hasattr(self.db, "get_latest_candidates"):
+                        try:
+                            cdf = self.db.get_latest_candidates(limit=max_symbols)
+                            rows = cdf.to_dict("records") if hasattr(cdf, "to_dict") else list(cdf or [])
+                            for r in rows:
+                                s = str((r or {}).get("symbol") or "").strip().upper()
+                                if s and s not in symbols:
+                                    symbols.append(s)
+                                if len(symbols) >= max_symbols:
+                                    break
+                        except Exception:
+                            symbols = []
+                    symbols = symbols[:max_symbols]
+                    summary["symbols"] = len(symbols)
+
+                    if not symbols:
+                        status = "WARN"
+                        summary["warning"] = "no_symbols"
+                    else:
+                        result = run_architect_queue_backtest(
+                            db_manager=self.db,
+                            config=self.config,
+                            variants=variants,
+                            symbols=symbols,
+                            history_limit=3000,
+                            max_workers=4,
+                            progress_cb=None,
+                            score_key='score',
+                        )
+                        logs_root = getattr(self.db, "paths", {}).get("logs") if getattr(self.db, "paths", None) else None
+                        if not logs_root:
+                            logs_root = os.path.join(os.getcwd(), "logs")
+                        out = export_architect_backtest_bundle(
+                            result=result,
+                            config=self.config,
+                            out_dir=os.path.join(logs_root, "backtest"),
+                            summaries_dir=os.path.join(logs_root, "summaries"),
+                            app_version=APP_VERSION,
+                            app_release=APP_RELEASE,
+                            include_csv=True,
+                        )
+                        bundle_json = ""
+                        try:
+                            bundle_json = str((out or {}).get("json") or "")
+                        except Exception:
+                            bundle_json = ""
+
+                        processed = 0
+                        for item in queue_items:
+                            ok = False
+                            try:
+                                if hasattr(self.db, "architect_queue_mark_status"):
+                                    ok = bool(self.db.architect_queue_mark_status(item.get("id"), "DONE", result_pointer=bundle_json))
+                            except Exception:
+                                ok = False
+                            if ok:
+                                processed += 1
+                        summary["processed"] = processed
+                        self.metrics.log_metric("agent_architect_orchestrator_processed", float(processed), {"symbols": len(symbols), "mode": self.mode})
+                        self.publish("architect_orchestrator_completed", {"processed": processed, "symbols": symbols[:10], "bundle": bundle_json})
+
+                        try:
+                            dep_id = f"DEPLOY-{int(time.time())}-ARCH-ORCH"
+                            self.experiments.create_deployment_unit(
+                                deployment_id=dep_id,
+                                change_type="ARCHITECT_ORCHESTRATOR_BUNDLE",
+                                diff_text=f"queue_items={len(queue_items)}; symbols={len(symbols)}; processed={processed}",
+                                status=("APPLIED" if processed > 0 else "PROPOSED"),
+                                approved_by="agent_master",
+                                rollback_pointer=bundle_json,
+                            )
+                        except Exception:
+                            try:
+                                self._logger.exception("[E_DEPLOYMENT_UNIT_ARCH_ORCH] Failed to write deployment unit")
+                            except Exception:
+                                pass
+
+                        self.log(f"🧠 [AGENT] Architect orchestrator complete: processed {processed} queue items across {len(symbols)} symbols.")
+                        if processed == 0:
+                            status = "WARN"
+        except Exception as e:
+            status = "FAIL"
+            summary["error"] = str(e)
+            self.metrics.log_anomaly(
+                "ARCHITECT_ORCHESTRATOR_FAIL",
                 severity="WARN",
                 source="agent_maintenance",
                 details={"error": str(e)},
@@ -1067,6 +1388,12 @@ class AgentMaster:
             return int(str(self.config.get(section, key, fallback=str(default))).strip())
         except Exception:
             return int(default)
+
+    def _cfg_float(self, section: str, key: str, default: float = 0.0) -> float:
+        try:
+            return float(str(self.config.get(section, key, fallback=str(default))).strip())
+        except Exception:
+            return float(default)
 
     def _cfg_str(self, section: str, key: str, default: str = "") -> str:
         try:

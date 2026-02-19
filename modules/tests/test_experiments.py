@@ -38,6 +38,21 @@ def test_experiments_store_v5190_tables_and_writes(tmp_path):
         metrics={"total_pl": 12.5},
     )
 
+    store.create_deployment_unit(
+        deployment_id="DEPLOY-TEST-001",
+        change_type="WATCHLIST_UPDATE",
+        diff_text="ACTIVE: AAPL -> AAPL,MSFT",
+        status="PROPOSED",
+        approved_by="agent_master",
+        rollback_pointer="backups/watchlist_001.ini",
+    )
+    store.update_deployment_unit_status(
+        deployment_id="DEPLOY-TEST-001",
+        status="APPLIED",
+        rollback_pointer="backups/watchlist_001.ini",
+    )
+    unit = store.get_deployment_unit("DEPLOY-TEST-001")
+
     db = tmp_path / "experiments.db"
     assert db.exists()
 
@@ -46,6 +61,7 @@ def test_experiments_store_v5190_tables_and_writes(tmp_path):
         n_exp = conn.execute("SELECT COUNT(1) FROM experiments").fetchone()[0]
         n_reg = conn.execute("SELECT COUNT(1) FROM strategy_registry").fetchone()[0]
         n_dep = conn.execute("SELECT COUNT(1) FROM deployments").fetchone()[0]
+        n_dep_units = conn.execute("SELECT COUNT(1) FROM deployment_units").fetchone()[0]
         n_cfg = conn.execute("SELECT COUNT(1) FROM config_snapshots").fetchone()[0]
     finally:
         conn.close()
@@ -53,4 +69,7 @@ def test_experiments_store_v5190_tables_and_writes(tmp_path):
     assert n_exp >= 1
     assert n_reg >= 1
     assert n_dep >= 1
+    assert n_dep_units >= 1
     assert n_cfg >= 1
+    assert unit is not None
+    assert unit.get("status") == "APPLIED"

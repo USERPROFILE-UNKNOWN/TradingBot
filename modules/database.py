@@ -400,6 +400,34 @@ class DataManager:
             except Exception:
                 pass
 
+        # v6.8.0: persist Architect queue in decision_logs.db (restart-safe orchestrator queue)
+        try:
+            with self._lock("decision_logs"):
+                conn = self._conn("decision_logs")
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS architect_queue (
+                        item_id TEXT PRIMARY KEY,
+                        symbol TEXT,
+                        seed_genome_json TEXT,
+                        status TEXT,
+                        created_at TEXT,
+                        updated_at TEXT,
+                        result_pointer TEXT,
+                        error_text TEXT,
+                        metrics_json TEXT
+                    )
+                    """
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_architect_queue_status ON architect_queue(status)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_architect_queue_created ON architect_queue(created_at)")
+                conn.commit()
+        except Exception:
+            try:
+                self._logger.exception('[E_DB_SCHEMA_ARCH_QUEUE]', extra={'component': 'db', 'mode': self._read_agent_mode()})
+            except Exception:
+                pass
+
     def export_db_health_report(self, out_dir: Optional[str] = None) -> Optional[str]:
         """Write a JSON DB health report into logs and return the file path."""
         try:
@@ -657,6 +685,116 @@ class DataManager:
     def get_latest_candidates(self, *args, **kwargs):
         return self.candidates_repo.get_latest_candidates(*args, **kwargs)
 
+    def architect_queue_list(self, statuses=None, limit: int = 500):
+        conn = self._conn("decision_logs")
+        lock = self._lock("decision_logs")
+        out = []
+        with lock:
+            try:
+                q = (
+                    "SELECT item_id, symbol, seed_genome_json, status, created_at, updated_at, "
+                    "result_pointer, error_text, metrics_json "
+                    "FROM architect_queue"
+                )
+                params = []
+                if statuses:
+                    vals = [str(s).upper() for s in statuses]
+                    q += " WHERE UPPER(status) IN ({})".format(
+                        ",".join(["?"] * len(vals))
+                    )
+                    params.extend(vals)
+                q += " ORDER BY created_at DESC LIMIT ?"
+                params.append(int(max(1, limit)))
+                cur = conn.execute(q, tuple(params))
+                rows = cur.fetchall() or []
+                for r in rows:
+                    genome = {}
+                    metrics = {}
+                    try:
+                        genome = json.loads(r[2] or "{}")
+                    except Exception:
+                        genome = {}
+                    try:
+                        metrics = json.loads(r[8] or "{}")
+                    except Exception:
+                        metrics = {}
+                    item = {
+                        "id": r[0],
+                        "source_symbol": r[1] or "",
+                        "genome": genome,
+                        "status": r[3] or "NEW",
+                        "created_at_utc": r[4] or "",
+                        "updated_at_utc": r[5] or "",
+                        "result_pointer": r[6] or "",
+                        "error_text": r[7] or "",
+                    }
+                    item.update(metrics)
+                    out.append(item)
+            except Exception:
+                return []
+        return out
+
+    def architect_queue_enqueue(self, source_symbol, genome, metrics=None):
+        conn = self._conn("decision_logs")
+        lock = self._lock("decision_logs")
+        now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        with lock:
+            try:
+                seed = json.dumps(genome or {}, ensure_ascii=False)
+                try:
+                    mjson = json.dumps(metrics or {}, ensure_ascii=False)
+                except Exception:
+                    mjson = "{}"
+                item_id = f"ARCH{int(time.time() * 1000)}"
+                conn.execute(
+                    """
+                    INSERT INTO architect_queue
+                    (item_id, symbol, seed_genome_json, status, created_at, updated_at, result_pointer, error_text, metrics_json)
+                    VALUES (?, ?, ?, 'NEW', ?, ?, '', '', ?)
+                    """,
+                    (item_id, str(source_symbol or '').upper(), seed, now, now, mjson),
+                )
+                conn.commit()
+                return item_id
+            except Exception:
+                return ""
+
+    def architect_queue_clear(self):
+        conn = self._conn("decision_logs")
+        lock = self._lock("decision_logs")
+        with lock:
+            try:
+                conn.execute("DELETE FROM architect_queue")
+                conn.commit()
+                return True
+            except Exception:
+                return False
+
+    def architect_queue_mark_status(self, item_id: str, status: str, result_pointer: str = "", error_text: str = ""):
+        conn = self._conn("decision_logs")
+        lock = self._lock("decision_logs")
+        now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        with lock:
+            try:
+                conn.execute(
+                    """
+                    UPDATE architect_queue
+                    SET status=?, updated_at=?, result_pointer=?, error_text=?
+                    WHERE item_id=?
+                    """,
+                    (
+                        str(status or "").upper(),
+                        now,
+                        str(result_pointer or ""),
+                        str(error_text or ""),
+                        str(item_id or ""),
+                    ),
+                )
+                conn.commit()
+                return True
+            except Exception:
+                return False
+
     def get_latest_snapshot(self, *args, **kwargs):
         return self.history_repo.get_latest_snapshot(*args, **kwargs)
 
@@ -747,3 +885,8 @@ class DataManager:
     def set_agent_suggestion_status(self, *args, **kwargs):
         return self.agent_repo.set_agent_suggestion_status(*args, **kwargs)
 
+    def get_agent_shadow_checkpoint(self, *args, **kwargs):
+        return self.agent_repo.get_agent_shadow_checkpoint(*args, **kwargs)
+
+    def upsert_agent_shadow_checkpoint(self, *args, **kwargs):
+        return self.agent_repo.upsert_agent_shadow_checkpoint(*args, **kwargs)

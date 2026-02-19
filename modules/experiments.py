@@ -4,6 +4,7 @@ v5.19.0 additions:
 - experiments
 - strategy_registry
 - deployments
+- deployment_units
 - config_snapshots
 """
 
@@ -88,6 +89,22 @@ class ExperimentsStore:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deployments_ts ON deployments(ts)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deployments_strategy ON deployments(strategy_name)")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deployment_units (
+                    deployment_id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    change_type TEXT NOT NULL,
+                    diff_text TEXT,
+                    status TEXT NOT NULL,
+                    approved_by TEXT,
+                    rollback_pointer TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deployment_units_status ON deployment_units(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_deployment_units_created_at ON deployment_units(created_at)")
 
             conn.execute(
                 """
@@ -201,6 +218,95 @@ class ExperimentsStore:
                 ),
             )
             conn.commit()
+
+    def create_deployment_unit(
+        self,
+        *,
+        deployment_id: str,
+        change_type: str,
+        diff_text: str = "",
+        status: str = "PROPOSED",
+        approved_by: str = "",
+        rollback_pointer: str = "",
+        created_at: str = "",
+    ) -> None:
+        created = str(created_at or "") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO deployment_units(
+                    deployment_id, created_at, change_type, diff_text, status, approved_by, rollback_pointer
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(deployment_id)
+                DO UPDATE SET
+                    change_type=excluded.change_type,
+                    diff_text=excluded.diff_text,
+                    status=excluded.status,
+                    approved_by=excluded.approved_by,
+                    rollback_pointer=excluded.rollback_pointer
+                """,
+                (
+                    str(deployment_id or ""),
+                    created,
+                    str(change_type or "UNKNOWN"),
+                    str(diff_text or ""),
+                    str(status or "PROPOSED").upper(),
+                    str(approved_by or ""),
+                    str(rollback_pointer or ""),
+                ),
+            )
+            conn.commit()
+
+    def update_deployment_unit_status(
+        self,
+        *,
+        deployment_id: str,
+        status: str,
+        approved_by: str = "",
+        rollback_pointer: str = "",
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE deployment_units
+                SET status=?, approved_by=CASE WHEN ?='' THEN approved_by ELSE ? END,
+                    rollback_pointer=CASE WHEN ?='' THEN rollback_pointer ELSE ? END
+                WHERE deployment_id=?
+                """,
+                (
+                    str(status or "").upper(),
+                    str(approved_by or ""),
+                    str(approved_by or ""),
+                    str(rollback_pointer or ""),
+                    str(rollback_pointer or ""),
+                    str(deployment_id or ""),
+                ),
+            )
+            conn.commit()
+
+    def get_deployment_unit(self, deployment_id: str) -> Optional[Dict[str, Any]]:
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT deployment_id, created_at, change_type, diff_text, status, approved_by, rollback_pointer
+                FROM deployment_units
+                WHERE deployment_id=?
+                LIMIT 1
+                """,
+                (str(deployment_id or ""),),
+            )
+            r = cur.fetchone()
+            if not r:
+                return None
+            return {
+                "deployment_id": r[0],
+                "created_at": r[1],
+                "change_type": r[2],
+                "diff_text": r[3] or "",
+                "status": r[4] or "",
+                "approved_by": r[5] or "",
+                "rollback_pointer": r[6] or "",
+            }
 
     def upsert_config_snapshot(
         self,

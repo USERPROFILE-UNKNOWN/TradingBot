@@ -53,6 +53,19 @@ class AgentRepo(RepoBase):
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_rationales_suggestion_id ON agent_rationales(suggestion_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_rationales_created_at ON agent_rationales(created_at)")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS agent_shadow_checkpoints (
+                    scope TEXT PRIMARY KEY,
+                    artifact_path TEXT,
+                    last_mtime REAL,
+                    last_hash TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_shadow_cp_updated_at ON agent_shadow_checkpoints(updated_at)")
             conn.commit()
 
 
@@ -148,5 +161,52 @@ class AgentRepo(RepoBase):
             cur.execute(
                 "UPDATE agent_suggestions SET status = ? WHERE id = ?",
                 (str(status), int(suggestion_id)),
+            )
+            conn.commit()
+
+    def get_agent_shadow_checkpoint(self, scope: str):
+        conn = self._conn("decision_logs")
+        lock = self._lock("decision_logs")
+        with lock:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT scope, artifact_path, last_mtime, last_hash, updated_at FROM agent_shadow_checkpoints WHERE scope = ? LIMIT 1",
+                (str(scope or ""),),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "scope": row[0],
+                "artifact_path": row[1] or "",
+                "last_mtime": float(row[2] or 0.0),
+                "last_hash": row[3] or "",
+                "updated_at": row[4] or "",
+            }
+
+    def upsert_agent_shadow_checkpoint(self, scope: str, artifact_path: str, last_mtime: float, last_hash: str):
+        conn = self._conn("decision_logs")
+        lock = self._lock("decision_logs")
+        updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with lock:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO agent_shadow_checkpoints (scope, artifact_path, last_mtime, last_hash, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(scope)
+                DO UPDATE SET
+                    artifact_path=excluded.artifact_path,
+                    last_mtime=excluded.last_mtime,
+                    last_hash=excluded.last_hash,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    str(scope or ""),
+                    str(artifact_path or ""),
+                    float(last_mtime or 0.0),
+                    str(last_hash or ""),
+                    updated_at,
+                ),
             )
             conn.commit()
