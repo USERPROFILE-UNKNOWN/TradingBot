@@ -111,15 +111,50 @@ class BacktestRepo(RepoBase):
 
 
     def save_backtest_result(self, data_dict):
+        try:
+            self.ensure_backtest_table()
+        except Exception:
+            pass
+
         conn = self._conn("backtest_results")
         lock = self._lock("backtest_results")
         with lock:
             try:
                 cursor = conn.cursor()
-                columns = ', '.join(data_dict.keys())
-                placeholders = ', '.join(['?'] * len(data_dict))
+                cursor.execute("PRAGMA table_info(backtest_results)")
+                existing_cols = {str(r[1]) for r in cursor.fetchall()}
+
+                # v6.15.1: full backtest rows may include dynamic strategy columns
+                # (e.g. PL_<strategy>, Trades_<strategy>). Add them forward-only.
+                for key, value in (data_dict or {}).items():
+                    if key in existing_cols:
+                        continue
+
+                    val = value
+                    if isinstance(val, bool):
+                        ctype = "INTEGER"
+                    elif isinstance(val, int):
+                        ctype = "INTEGER"
+                    elif isinstance(val, float):
+                        ctype = "REAL"
+                    else:
+                        ctype = "TEXT"
+
+                    try:
+                        cursor.execute(f"ALTER TABLE backtest_results ADD COLUMN {key} {ctype}")
+                        existing_cols.add(str(key))
+                    except Exception:
+                        # Keep insert path resilient even if one add fails.
+                        pass
+
+                filtered = {k: v for k, v in (data_dict or {}).items() if k in existing_cols}
+                if not filtered:
+                    return
+
+                columns = ', '.join(filtered.keys())
+                placeholders = ', '.join(['?'] * len(filtered))
                 sql = f"INSERT OR REPLACE INTO backtest_results ({columns}) VALUES ({placeholders})"
-                cursor.execute(sql, list(data_dict.values()))
+                cursor.execute(sql, list(filtered.values()))
                 conn.commit()
             except Exception:
                 try:

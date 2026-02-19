@@ -412,9 +412,16 @@ class TradingApp(ctk.CTk):
             mini = bool(getattr(self, "_miniplayer_enabled", False))
 
             # v5.13.2 updateA: throttle heavy redraw loops when miniplayer is enabled.
-            if not mini:
-                if hasattr(self, 'dashboard_logic'):
+            # Keep health widget live even in mini-player so Dashboard does not remain
+            # stuck at "Health: loading...".
+            if hasattr(self, 'dashboard_logic'):
+                if not mini:
                     self.dashboard_logic.update()
+                else:
+                    try:
+                        self.dashboard_logic.update_health_widget()
+                    except Exception:
+                        pass
 
             # Positions tab redraw can be expensive; only refresh it while in miniplayer
             # when the user is actually viewing that tab.
