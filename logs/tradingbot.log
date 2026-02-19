@@ -1,6 +1,0 @@
-2026-02-16 20:03:11,983 | INFO | modules.database | component=db mode=OFF symbol=- order_id=- strategy=- | [E_DB_SPLIT_MISSING] db_mode=split; missing split DB files in db_dir='C:\Users\Cameron\Desktop\TradingBot\db': historical_prices.db, active_trades.db, trade_history.db, decision_logs.db, backtest_results.db. Empty DBs will be created automatically.
-2026-02-16 20:03:33,166 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
-2026-02-16 20:03:33,328 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
-2026-02-16 20:03:33,636 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
-2026-02-16 20:03:33,695 | INFO | modules.ui | component=ui mode=OFF symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
-2026-02-16 20:03:52,826 | INFO | modules.ui | component=engine mode=OFF symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.16_20.03.52_paper.json
