@@ -112,7 +112,7 @@ def test_warmup_window_disables_quarantine():
     assert any(m[0] == "agent_stale_quarantine_warmup_remaining_seconds" for m in agent.metrics.metrics)
 
 
-def test_stale_symbols_with_history_are_quarantined_after_warmup():
+def test_stale_symbols_with_history_are_reported_after_warmup():
     cfg = _cfg_with_active("AAPL")
     cfg["CONFIGURATION"]["agent_stale_quarantine_equity_market_hours_only"] = "False"
     old_ts = datetime.now(timezone.utc) - timedelta(hours=5)
@@ -121,10 +121,10 @@ def test_stale_symbols_with_history_are_quarantined_after_warmup():
 
     AgentMaster._run_stale_symbol_quarantine(agent)
 
-    assert "AAPL" not in cfg["WATCHLIST_ACTIVE_STOCK"]
-    assert "AAPL" in cfg["WATCHLIST_ARCHIVE_STOCK"]
-    assert agent._persist_calls == 1
-    assert any(a[0] == "STALE_SYMBOL_QUARANTINE" for a in agent.metrics.anomalies)
+    assert "AAPL" in cfg["WATCHLIST_ACTIVE_STOCK"]
+    assert "AAPL" not in cfg["WATCHLIST_ARCHIVE_STOCK"]
+    assert agent._persist_calls == 0
+    assert any(a[0] == "STALE_SYMBOL_REPORT" for a in agent.metrics.anomalies)
 
 
 
@@ -148,7 +148,7 @@ def test_equity_after_hours_uses_relaxed_threshold(monkeypatch):
     assert "AAPL" not in cfg["WATCHLIST_ARCHIVE_STOCK"]
 
 
-def test_crypto_quarantine_uses_crypto_threshold(monkeypatch):
+def test_crypto_report_uses_crypto_threshold(monkeypatch):
     cfg = _cfg_with_active("BTC/USD")
     cfg["CONFIGURATION"]["agent_stale_quarantine_crypto_threshold_seconds"] = "3600"
     old_ts = datetime(2026, 2, 19, 2, 0, tzinfo=timezone.utc) - timedelta(hours=5)
@@ -163,11 +163,12 @@ def test_crypto_quarantine_uses_crypto_threshold(monkeypatch):
 
     AgentMaster._run_stale_symbol_quarantine(agent)
 
-    assert "BTC/USD" not in cfg["WATCHLIST_ACTIVE_CRYPTO"]
-    assert "BTC/USD" in cfg["WATCHLIST_ARCHIVE_CRYPTO"]
+    assert "BTC/USD" in cfg["WATCHLIST_ACTIVE_CRYPTO"]
+    assert "BTC/USD" not in cfg["WATCHLIST_ARCHIVE_CRYPTO"]
+    assert any(a[0] == "STALE_SYMBOL_REPORT" for a in agent.metrics.anomalies)
 
 
-def test_quarantine_respects_daily_budget(monkeypatch):
+def test_stale_report_respects_daily_budget(monkeypatch):
     cfg = _cfg_with_active("AAPL", "MSFT")
     cfg["CONFIGURATION"]["agent_stale_quarantine_max_per_day"] = "1"
     cfg["CONFIGURATION"]["agent_stale_quarantine_equity_market_hours_only"] = "False"
@@ -183,5 +184,8 @@ def test_quarantine_respects_daily_budget(monkeypatch):
 
     AgentMaster._run_stale_symbol_quarantine(agent)
 
-    moved = int("AAPL" in cfg["WATCHLIST_ARCHIVE_STOCK"]) + int("MSFT" in cfg["WATCHLIST_ARCHIVE_STOCK"])
-    assert moved == 1
+    reported = [a for a in agent.metrics.anomalies if a[0] == "STALE_SYMBOL_REPORT"]
+    assert len(reported) == 1
+    details = reported[0][3]
+    assert int(details.get("count", 0)) == 1
+    assert "AAPL" in cfg["WATCHLIST_ACTIVE_STOCK"] and "MSFT" in cfg["WATCHLIST_ACTIVE_STOCK"]

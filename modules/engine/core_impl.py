@@ -15,6 +15,7 @@ import os
 import json
 import uuid
 import hashlib
+import importlib
 import math
 import time
 import pandas as pd
@@ -24,9 +25,29 @@ from datetime import datetime, timedelta, timezone
 from collections import deque
 from ..strategies import StrategyOptimizer, WalletManager
 from ..sentiment import NewsSentinel 
-from ..ai import AI_Oracle 
 from ..utils import APP_VERSION, APP_RELEASE, get_paths
 from ..logging_utils import get_logger
+
+
+class _DisabledAIOracle:
+    """Fallback AI surface when optional AI dependencies are unavailable."""
+
+    def __init__(self, log_func=None, reason: str = "optional ai dependencies unavailable"):
+        self.log = log_func
+        self.reason = str(reason)
+        self.last_train_stats = {"status": "disabled", "reason": self.reason}
+
+    def train_model(self, *args, **kwargs):
+        try:
+            if callable(self.log):
+                self.log(f"🤖 [AI] Training skipped ({self.reason}).")
+        except Exception:
+            pass
+        return self.last_train_stats
+
+    def predict_probability(self, *_args, **_kwargs):
+        return 0.5
+
 
 class TradingEngine:
     def __init__(self, config, db, log_callback, update_chart_callback):
@@ -113,9 +134,26 @@ class TradingEngine:
         if self.api:
             self.sentinel = NewsSentinel(self.api)
             
-        # v3.9.16 FIX: Pass log_callback so AI speaks to UI
-        self.ai = AI_Oracle(self.db, self.config, self.log)
-        threading.Thread(target=self.ai_training_thread, daemon=True).start()
+        # v6.21.3: AI is optional at runtime; fallback keeps core loop deterministic.
+        self.ai = self._init_ai_oracle()
+
+    def _init_ai_oracle(self):
+        try:
+            ai_mod = importlib.import_module("modules.ai")
+            ai_cls = getattr(ai_mod, "AI_Oracle", None)
+            if ai_cls is None:
+                raise RuntimeError("AI_Oracle class missing")
+            oracle = ai_cls(self.db, self.config, self.log)
+            if self._cfg_bool("ai_runtime_training_enabled", False):
+                threading.Thread(target=self.ai_training_thread, daemon=True).start()
+            return oracle
+        except Exception as e:
+            reason = f"AI unavailable: {e}"
+            try:
+                self.log(f"🤖 [AI] {reason}. Falling back to deterministic sizing.")
+            except Exception:
+                pass
+            return _DisabledAIOracle(self.log, reason=reason)
 
     def _current_mode(self) -> str:
         """Best-effort agent mode for structured log context."""

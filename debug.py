@@ -11,7 +11,7 @@ except Exception:
     pass
 
 print("\n--- STEP 1: CHECKING DEPENDENCIES ---")
-libs = ['pandas', 'numpy', 'customtkinter', 'alpaca_trade_api', 'vaderSentiment', 'sklearn', 'scipy']
+libs = ['pandas', 'numpy', 'customtkinter', 'alpaca_trade_api', 'vaderSentiment']
 for lib in libs:
     try:
         __import__(lib)

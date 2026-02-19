@@ -1023,6 +1023,8 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             "update_db_lookback_days": "How many day(s) of 1-minute candles Update DB should pull.",
             "promotion_enabled": "Enable/disable paper -> live promotion evaluation.",
             "promotion_window_days": "How many days of paper evidence to consider for promotion evaluation.",
+            "agent_autopilot_enabled": "Start AgentMaster scheduler/services automatically at app startup (explicit opt-in).",
+            "agent_autopilot_require_engine_running_for_mutations": "If True, autopilot mutation jobs are blocked while engine is stopped.",
             "agent_candidate_scan_enabled": "Enable scheduled headless candidate scans by AgentMaster.",
             "agent_candidate_scan_interval_minutes": "How often AgentMaster runs headless candidate scans (minutes).",
             "agent_candidate_simulation_enabled": "Enable scheduled candidate simulation/scoring on latest candidates.",
@@ -1053,9 +1055,10 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             "agent_stale_quarantine_crypto_threshold_seconds": "Stale threshold for crypto symbols (24/7).",
             "agent_stale_quarantine_max_per_day": "Maximum symbols stale-quarantined per day.",
             "agent_stale_quarantine_cooldown_minutes": "Cooldown in minutes after stale quarantine action.",
-            "agent_stale_quarantine_warmup_minutes": "Startup grace window before stale quarantine can archive symbols (missing history remains uninitialized).",
+            "agent_stale_quarantine_warmup_minutes": "Startup grace window before stale-symbol reporting can evaluate symbols (missing history remains uninitialized).",
             "ai_v2_enabled": "Enable AI v2 pipeline (labels + calibration + walk-forward).",
             "ai_walkforward_folds": "Walk-forward folds for AI v2 (higher = slower).",
+            "ai_runtime_training_enabled": "Start background AI training thread when TradingEngine initializes (optional AI dependencies required).",
             "research_report_rows": "How many rows from backtest_results to include in strategy selection report.",
 
             # v5.12.7: Config tab + history tracking

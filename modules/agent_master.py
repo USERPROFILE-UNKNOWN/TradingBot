@@ -8,6 +8,7 @@ import json
 import sqlite3
 import hashlib
 import time
+import threading
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 
@@ -20,7 +21,7 @@ from .logging_utils import get_component_logger
 from .research.tv_autovalidation import TradingViewAutoValidator
 from .research.watchlist_policy import apply_watchlist_policy
 from .research.full_backtest_service import run_full_backtest_service
-from .watchlist_api import add_watchlist_symbol, get_watchlist_symbols, remove_watchlist_symbol
+from .watchlist_api import get_watchlist_symbols
 from .agent_shadow import AgentShadow
 
 
@@ -85,6 +86,15 @@ class AgentMaster:
         self._autopilot_seq = 0
 
         self.bus.subscribe("*", self._on_event)
+        self._started = False
+        self._state_write_lock = threading.RLock()
+        self._engine_running_provider = None
+
+
+    def start(self) -> bool:
+        """Start optional automation services (explicit opt-in)."""
+        if bool(getattr(self, "_started", False)):
+            return False
         self._register_jobs()
         self.scheduler.start()
 
@@ -93,6 +103,23 @@ class AgentMaster:
 
         # v6.20.0: AgentShadow proposal loop (PAPER-first, no direct execution).
         self._start_agent_shadow_if_enabled()
+        self._started = True
+        return True
+
+    def attach_state_controls(self, *, state_write_lock=None, engine_running_provider=None) -> None:
+        """Attach shared mutation lock and optional engine-running provider."""
+        if state_write_lock is not None:
+            self._state_write_lock = state_write_lock
+        self._engine_running_provider = engine_running_provider
+
+    def _engine_running(self) -> bool:
+        fn = getattr(self, "_engine_running_provider", None)
+        if fn is None:
+            return True
+        try:
+            return bool(fn())
+        except Exception:
+            return False
 
     def shutdown(self):
         try:
@@ -102,7 +129,8 @@ class AgentMaster:
             pass
 
         try:
-            self.scheduler.stop()
+            if bool(getattr(self, "_started", False)):
+                self.scheduler.stop()
         except Exception:
             pass
 
@@ -111,6 +139,7 @@ class AgentMaster:
                 self._shadow_agent.stop()
         except Exception:
             pass
+        self._started = False
 
     def set_mode(self, mode: str):
         candidate = str(mode or "OFF").strip().upper()
@@ -459,24 +488,20 @@ class AgentMaster:
         if len(stale_syms) > budget_left:
             stale_syms = stale_syms[:budget_left]
 
-        moved = []
-        for sym in stale_syms:
-            removed = remove_watchlist_symbol(self.config, sym, group="ACTIVE")
-            if removed and add_watchlist_symbol(self.config, sym, group="ARCHIVE"):
-                moved.append(sym)
+        reported = list(stale_syms)
+        if not reported:
+            return
 
-        if moved:
-            self._persist_split_config()
-            self._stale_quarantine_count_today = int(getattr(self, "_stale_quarantine_count_today", 0) or 0) + len(moved)
-            if cooldown_minutes > 0:
-                self._stale_quarantine_cooldown_until = now_epoch + (cooldown_minutes * 60.0)
-            self.metrics.log_anomaly(
-                "STALE_SYMBOL_QUARANTINE",
-                severity="WARN",
-                source="agent_maintenance",
-                details={"count": len(moved), "symbols": moved[:25]},
-            )
-            self.log(f"🧠 [AGENT] Quarantined {len(moved)} stale symbols to ARCHIVE watchlist.")
+        self._stale_quarantine_count_today = int(getattr(self, "_stale_quarantine_count_today", 0) or 0) + len(reported)
+        if cooldown_minutes > 0:
+            self._stale_quarantine_cooldown_until = now_epoch + (cooldown_minutes * 60.0)
+        self.metrics.log_anomaly(
+            "STALE_SYMBOL_REPORT",
+            severity="WARN",
+            source="agent_maintenance",
+            details={"count": len(reported), "symbols": reported[:25], "mode": "READ_ONLY"},
+        )
+        self.log(f"🧠 [AGENT] Stale symbol report generated ({len(reported)} symbol(s)); watchlists unchanged.")
 
     def _run_candidate_scan(self) -> None:
         if self.mode not in {"PAPER", "LIVE"}:
@@ -635,8 +660,23 @@ class AgentMaster:
         status = "OK"
         summary = {"job": "agent_watchlist_policy_update"}
         try:
+            require_engine = self._cfg_bool("CONFIGURATION", "agent_autopilot_require_engine_running_for_mutations", True)
+            if require_engine and not self._engine_running():
+                status = "SKIP"
+                summary["reason"] = "engine_stopped"
+                self.metrics.log_anomaly(
+                    "AUTOPILOT_MUTATION_BLOCKED",
+                    severity="INFO",
+                    source="agent_maintenance",
+                    details={"job": "agent_watchlist_policy_update", "reason": "engine_stopped"},
+                )
+                if run_id:
+                    self.metrics.finish_autopilot_run(run_id, status=status, summary=summary)
+                return
+
             before = list(get_watchlist_symbols(self.config, group="ACTIVE", asset="ALL") or [])
-            res = apply_watchlist_policy(
+            with self._state_write_lock:
+                res = apply_watchlist_policy(
                 self.config,
                 self.db,
                 getattr(self.db, "paths", {}) or {},
@@ -1375,7 +1415,8 @@ class AgentMaster:
 
             p = getattr(self.db, "paths", None)
             if isinstance(p, dict):
-                write_split_config(self.config, p)
+                with self._state_write_lock:
+                    write_split_config(self.config, p)
         except Exception:
             self._logger.exception("[E_AGENT_CFG_WRITE] Failed persisting split config")
 

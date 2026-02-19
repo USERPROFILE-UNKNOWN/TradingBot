@@ -16,11 +16,18 @@ set "SS=%datetime:~12,2%"
 
 :: --- 2. USER INPUT ---
 echo ==========================================================
-echo      TRADINGBOT SETUP MANAGER (v5.16.2)
+echo      TRADINGBOT SETUP MANAGER (v6.22.1)
 echo ==========================================================
 echo.
-set /p TARGET_VERSION="Enter Version (e.g. v5.16.2): "
-if "%TARGET_VERSION%"=="" set TARGET_VERSION=v5.16.2
+set /p TARGET_VERSION="Enter Version (e.g. v6.22.1): "
+if "%TARGET_VERSION%"=="" set TARGET_VERSION=v6.22.1
+set /p BUILD_PROFILE="Build profile [LEAN/FULL_AI] (default LEAN): "
+if "%BUILD_PROFILE%"=="" set BUILD_PROFILE=LEAN
+set "BUILD_PROFILE=%BUILD_PROFILE: =%"
+if /I not "%BUILD_PROFILE%"=="LEAN" if /I not "%BUILD_PROFILE%"=="FULL_AI" (
+    echo [WARN] Unknown profile "%BUILD_PROFILE%". Falling back to LEAN.
+    set BUILD_PROFILE=LEAN
+)
 
 :: Define Log File
 if not exist "%ROOT_DIR%\logs" mkdir "%ROOT_DIR%\logs"
@@ -59,6 +66,7 @@ exit /b
     echo      TRADINGBOT BUILD LOG
     echo      Version: %TARGET_VERSION%
     echo      Date: %YYYY%-%MM%-%DD% %HH%:%Min%:%SS%
+    echo      Profile: %BUILD_PROFILE%
     echo ==========================================================
     echo.
     
@@ -81,7 +89,13 @@ exit /b
         echo [WARN] pkg_resources missing; pinning setuptools to 81.0.0...
         python -m pip install --upgrade --force-reinstall "setuptools==81.0.0"
     )
-    python -m pip install customtkinter alpaca-trade-api pandas_ta pandas requests pyinstaller matplotlib numpy vaderSentiment scikit-learn scipy yfinance pytest
+    if /I "%BUILD_PROFILE%"=="FULL_AI" (
+        echo [INFO] Installing FULL_AI dependency set...
+        python -m pip install customtkinter alpaca-trade-api pandas_ta pandas requests pyinstaller matplotlib numpy vaderSentiment yfinance pytest scikit-learn scipy
+    ) else (
+        echo [INFO] Installing LEAN dependency set...
+        python -m pip install customtkinter alpaca-trade-api pandas_ta pandas requests pyinstaller matplotlib numpy vaderSentiment yfinance pytest
+    )
     python -m pip install jaraco.text jaraco.classes jaraco.context platformdirs packaging more-itertools
 
     echo.
@@ -94,59 +108,19 @@ exit /b
     )
 
     echo.
-    echo [STEP 2c] Downloading Intel TBB Redist (Windows x64)...
-    
-    REM v3.9.23 FIX: Force .zip extension so Expand-Archive accepts it
-    set "TBB_VER=2022.3.0.380"
-    set "TBB_URL=https://www.nuget.org/api/v2/package/inteltbb.redist.win/%TBB_VER%"
-    set "DEPS_DIR=%ROOT_DIR%\build\deps"
-    set "TBB_ZIP=%DEPS_DIR%\tbb_redist.zip"
-    set "TBB_EXTRACT=%DEPS_DIR%\tbb_extracted"
-    
-    if not exist "%DEPS_DIR%" mkdir "%DEPS_DIR%"
-    
-    REM Download and Extract using PowerShell
-    echo [INFO] Downloading TBB %TBB_VER% to %TBB_ZIP%...
-    powershell -NoProfile -Command ^
-        "$ErrorActionPreference='Stop';" ^
-        "Invoke-WebRequest -Uri '%TBB_URL%' -OutFile '%TBB_ZIP%';" ^
-        "if(Test-Path '%TBB_EXTRACT%'){Remove-Item -Recurse -Force '%TBB_EXTRACT%'};" ^
-        "Expand-Archive -Path '%TBB_ZIP%' -DestinationPath '%TBB_EXTRACT%' -Force;"
-        
-    echo.
-    echo [STEP 3] Hunting Dependencies...
-    echo [INFO] Locating tbb12.dll from extracted redist...
-    set "TBB_DLL="
-
-    REM 1) Try the common NuGet layout first:
-    set "TBB_CANDIDATE=%TBB_EXTRACT%\runtimes\win-x64\native\tbb12.dll"
-    if exist "%TBB_CANDIDATE%" set "TBB_DLL=%TBB_CANDIDATE%"
-
-    REM 2) Fallback: search anywhere under extraction, prefer win-x64 paths
-    if not defined TBB_DLL (
-      for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command ^
-        "Get-ChildItem -Path '%TBB_EXTRACT%' -Recurse -Filter tbb12.dll | Sort-Object @{Expression={$_.FullName -notlike '*win-x64*'}}, FullName | Select-Object -First 1 -ExpandProperty FullName"`) do set "TBB_DLL=%%I"
-    )
-
-    if defined TBB_DLL if exist "!TBB_DLL!" (
-        echo [OK] Found TBB DLL: !TBB_DLL!
-        for %%D in ("!TBB_DLL!") do set "TBB_BIN=%%~dpD"
-        
-        REM Help PyInstaller resolve dependency at analysis time
-        set "PATH=!TBB_BIN!;%PATH%"
-        
-        REM Bundle into exe root
-        set "BINARY_CMD=--add-binary ^"!TBB_DLL!^";."
+    if /I "%BUILD_PROFILE%"=="FULL_AI" (
+        echo [STEP 2c] FULL_AI profile: enabling sklearn/scipy runtime bundle (no TBB redist).
+        set "PYI_AI_COLLECT=--collect-all sklearn --collect-all scipy"
     ) else (
-        echo [FATAL] Could not find tbb12.dll in NuGet redist extraction.
-        echo [DEBUG] Looked in: %TBB_EXTRACT%
-        set "BINARY_CMD="
-        exit /b 1
+        echo [STEP 2c] LEAN profile: skipping Intel TBB redist and native AI bundles.
+        set "PYI_AI_COLLECT="
     )
+    set "BINARY_CMD="
 
     echo.
     echo [STEP 4] Building Application...
-    echo [INFO] Strategy: Flat Modules + TBB Bundle (Redist) + FULL SciPy Collection
+
+    echo [INFO] Strategy: Flat Modules + %BUILD_PROFILE% profile
     echo.
 
     REM PYINSTALLER COMMAND
@@ -164,8 +138,7 @@ exit /b
         !BINARY_CMD! ^
         --collect-all "customtkinter" ^
         --collect-all "vaderSentiment" ^
-        --collect-all "sklearn" ^
-        --collect-all "scipy" ^
+        !PYI_AI_COLLECT! ^
         --hidden-import "jaraco.text" ^
         --hidden-import "matplotlib" ^
         --hidden-import "modules.tabs.dashboard" ^
@@ -200,6 +173,18 @@ exit /b
     if exist "%ROOT_DIR%\*.spec" (
         move "%ROOT_DIR%\*.spec" "!BACKUP_DIR!" >nul
     )
+
+    echo.
+    echo [STEP 6] Post-build validation...
+    if not exist "%ROOT_DIR%\TradingBot [%TARGET_VERSION%].exe" (
+        echo [FATAL ERROR] Expected executable missing: TradingBot [%TARGET_VERSION%].exe
+        exit /b 1
+    )
+    if not exist "%ROOT_DIR%\config\config.ini" (
+        echo [FATAL ERROR] Expected runtime config missing: config\config.ini
+        exit /b 1
+    )
+    echo [OK] Post-build validation passed.
 
     echo.
     echo ==========================================================

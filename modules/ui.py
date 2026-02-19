@@ -12,6 +12,7 @@ from tkinter import messagebox, ttk
 from datetime import datetime
 from .engine import TradingEngine
 from .agent_master import AgentMaster
+from .autopilot_controller import AutopilotController
 from .backfill import BackfillEngine
 from .utils import get_paths, write_split_config, ensure_split_config_layout, APP_VERSION, APP_RELEASE
 from .logging_utils import get_logger
@@ -27,6 +28,7 @@ from .tabs.candidates import CandidatesTab
 from .research.full_backtest_service import run_full_backtest_service
 from .research.backtest_exporter import export_backtest_bundle
 from .research.watchlist_policy import apply_watchlist_policy
+from .ai_trainer_tool import run_manual_training
 
 class TradingApp(ctk.CTk):
     def __init__(self, config, db_manager):
@@ -77,6 +79,7 @@ class TradingApp(ctk.CTk):
         
         self.engine = None
         self.agent_master = None
+        self.autopilot = None
         
         # Data Cache for Sorting
         self.backtest_df = None
@@ -128,7 +131,9 @@ class TradingApp(ctk.CTk):
         if self.engine and self.engine.active:
             self.engine.stop()
         try:
-            if self.agent_master:
+            if self.autopilot:
+                self.autopilot.stop()
+            elif self.agent_master:
                 self.agent_master.shutdown()
         except Exception:
             pass
@@ -252,10 +257,19 @@ class TradingApp(ctk.CTk):
         # 4. Engine
         self.engine = TradingEngine(self.config, self.db_manager, self.log, self.trigger_chart_update)
         self.agent_master = AgentMaster(self.config, self.db_manager, self.log)
+        self.autopilot = AutopilotController(self.agent_master, log_fn=self.log)
         try:
             self.engine.set_agent_master(self.agent_master)
         except Exception:
             pass
+
+        # v6.21.2: Autopilot controller handles explicit lifecycle + mutation safeguards.
+        try:
+            if self._as_bool(self.config.get("CONFIGURATION", "agent_autopilot_enabled", fallback="False"), False):
+                if self.autopilot.start(engine_running_provider=lambda: bool(getattr(self.engine, "active", False))):
+                    self.log("🧠 [AGENT] Autopilot started (agent_autopilot_enabled=True).")
+        except Exception as e:
+            self.log(f"[AGENT] Autopilot startup failed: {e}")
 
         # 5. Logic
         self.dashboard_logic = DashboardTab(self.tab_chart, self.engine, self.db_manager, self.config, metrics_store=getattr(self.agent_master, "metrics", None))
@@ -1266,8 +1280,10 @@ class TradingApp(ctk.CTk):
 
             def _worker():
                 try:
-                    # force retrain when requested (default True)
-                    self.engine.ai.train_model(force=bool(force))
+                    # v6.21.3: manual one-shot AI training tool (optional dependencies).
+                    res = run_manual_training(self.db_manager, self.config, self.log, force=bool(force))
+                    if not bool(res.get("ok")):
+                        self.log(f"🤖 AI retraining skipped: {res.get('error', 'unavailable')}")
                 except Exception as e:
                     try:
                         self.log(f"🧠 [AI] Training thread crashed: {e}")

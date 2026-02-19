@@ -242,6 +242,8 @@ _SCHEMA: list[FieldSpec] = [
     FieldSpec("CONFIGURATION", "agent_stale_quarantine_threshold_seconds", "int", 21600, required=False, min_value=60, max_value=604800),
     FieldSpec("CONFIGURATION", "agent_stale_quarantine_warmup_minutes", "int", 45, required=False, min_value=0, max_value=1440),
     FieldSpec("CONFIGURATION", "agent_auto_backfill_enabled", "bool", True, required=False),
+    FieldSpec("CONFIGURATION", "agent_autopilot_enabled", "bool", False, required=False),
+    FieldSpec("CONFIGURATION", "agent_autopilot_require_engine_running_for_mutations", "bool", True, required=False),
     FieldSpec("CONFIGURATION", "agent_candidate_scan_enabled", "bool", True, required=False),
     FieldSpec("CONFIGURATION", "agent_candidate_scan_interval_minutes", "int", 60, required=False, min_value=5, max_value=1440),
     FieldSpec("CONFIGURATION", "agent_candidate_simulation_enabled", "bool", True, required=False),
