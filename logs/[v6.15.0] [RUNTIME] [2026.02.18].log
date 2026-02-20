@@ -1,0 +1,82 @@
+2026-02-18 23:42:29 | --- START v6.15.0 | Phase 5 — Shadow data-quality failure scoring ---
+2026-02-18 23:42:30 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-18 23:42:30 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-18 23:42:30 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-18 23:42:31 | 🧠 [AI] Not enough data to train.
+2026-02-18 23:42:48 | [SYSTEM] 📄 Run summary written: summary_2026.02.18_23.42.48_paper.json
+2026-02-18 23:43:29 | --- START v6.15.0 | Phase 5 — Shadow data-quality failure scoring ---
+2026-02-18 23:43:30 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-18 23:43:30 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-18 23:43:30 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-18 23:43:30 | 🧠 [AI] Not enough data to train.
+2026-02-18 23:43:56 | [DB] ⏳ AMD | fetched 7972 | inserted 7773 | up_to_date False (1/37)
+2026-02-18 23:43:57 | [DB] ⏳ SOXL | fetched 8189 | inserted 7990 | up_to_date False (2/37)
+2026-02-18 23:43:57 | [DB] ⏳ PLTR | fetched 8045 | inserted 7846 | up_to_date False (3/37)
+2026-02-18 23:43:57 | [DB] ⏳ UBER | fetched 8157 | inserted 7958 | up_to_date False (4/37)
+2026-02-18 23:43:57 | [DB] ⏳ TQQQ | fetched 9409 | inserted 9210 | up_to_date False (5/37)
+2026-02-18 23:43:58 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-18 23:43:58 | 📦 Config backed up to: C:\Users\Cameron\Desktop\TradingBot\backups\config\2026.02.18_23.43.58
+2026-02-18 23:43:58 | [WATCHLIST] ✅ Policy applied (ADD). Added=[] Removed=['AAVE/USD', 'AVAX/USD', 'BAT/USD', 'BCH/USD', 'BTC/USD', 'CRV/USD', 'DOGE/USD', 'DOT/USD', 'ETH/USD', 'GRT/USD', 'LINK/USD', 'LTC/USD', 'PEPE/USD', 'SHIB/USD', 'SKY/USD', 'SOL/USD', 'SUSHI/USD', 'TRUMP/USD', 'UNI/USD', 'USDC/USD', 'USDG/USD', 'USDT/USD', 'XRP/USD', 'XTZ/USD', 'YFI/USD']
+2026-02-18 23:43:58 | 🧭 [WATCHLIST] Policy applied (None): +0 -25 (batch 2026.02.19_05.43.58)
+2026-02-18 23:44:02 | [DB] ⏳ COIN | fetched 7910 | inserted 7711 | up_to_date False (6/37)
+2026-02-18 23:44:03 | [DB] ⏳ XLE | fetched 8183 | inserted 7984 | up_to_date False (7/37)
+2026-02-18 23:44:03 | [DB] ⏳ HOOD | fetched 8003 | inserted 7804 | up_to_date False (8/37)
+2026-02-18 23:44:03 | [DB] ⏳ MARA | fetched 8500 | inserted 8301 | up_to_date False (9/37)
+2026-02-18 23:44:03 | [DB] ⏳ SQQQ | fetched 8829 | inserted 8630 | up_to_date False (10/37)
+2026-02-18 23:44:04 | [DB] ⏳ SPXU | fetched 3895 | inserted 3696 | up_to_date False (11/37)
+2026-02-18 23:44:04 | [DB] ⏳ SOXS | fetched 6138 | inserted 5939 | up_to_date False (12/37)
+2026-02-18 23:44:22 | [DB] ⏳ AVAX/USD | fetched 32402 | inserted 32067 | up_to_date False (13/37)
+2026-02-18 23:44:26 | [DB] ⏳ BCH/USD | fetched 31456 | inserted 31195 | up_to_date False (14/37)
+2026-02-18 23:44:27 | [DB] ⏳ AAVE/USD | fetched 35355 | inserted 35018 | up_to_date False (15/37)
+2026-02-18 23:44:27 | [DB] ⏳ BAT/USD | fetched 36570 | inserted 36108 | up_to_date False (16/37)
+2026-02-18 23:44:28 | [DB] ⏳ BTC/USD | fetched 43077 | inserted 42591 | up_to_date False (17/37)
+2026-02-18 23:45:18 | [DB] ⏳ CRV/USD | fetched 34255 | inserted 33883 | up_to_date False (18/37)
+2026-02-18 23:45:19 | [DB] ⏳ GRT/USD | fetched 34293 | inserted 33847 | up_to_date False (19/37)
+2026-02-18 23:45:19 | [DB] ⏳ DOT/USD | fetched 34334 | inserted 33924 | up_to_date False (20/37)
+2026-02-18 23:45:20 | [DB] ⏳ DOGE/USD | fetched 34577 | inserted 34247 | up_to_date False (21/37)
+2026-02-18 23:45:21 | [DB] ⏳ ETH/USD | fetched 35190 | inserted 34885 | up_to_date False (22/37)
+2026-02-18 23:45:48 | [DB] ⏳ SKY/USD | fetched 28119 | inserted 27876 | up_to_date False (23/37)
+2026-02-18 23:46:08 | [DB] ⏳ LINK/USD | fetched 33517 | inserted 33193 | up_to_date False (24/37)
+2026-02-18 23:46:09 | [DB] ⏳ LTC/USD | fetched 34593 | inserted 34237 | up_to_date False (25/37)
+2026-02-18 23:46:14 | [DB] ⏳ SHIB/USD | fetched 37776 | inserted 37354 | up_to_date False (26/37)
+2026-02-18 23:46:15 | [DB] ⏳ PEPE/USD | fetched 39101 | inserted 38669 | up_to_date False (27/37)
+2026-02-18 23:46:15 | [DB] ⏳ SOL/USD | fetched 35654 | inserted 35336 | up_to_date False (28/37)
+2026-02-18 23:46:57 | [DB] ⏳ TRUMP/USD | fetched 30293 | inserted 30022 | up_to_date False (29/37)
+2026-02-18 23:47:00 | [DB] ⏳ USDG/USD | fetched 40336 | inserted 4589 | up_to_date False (30/37)
+2026-02-18 23:47:03 | [DB] ⏳ USDT/USD | fetched 1189 | inserted 990 | up_to_date False (31/37)
+2026-02-18 23:47:17 | [DB] ⏳ USDC/USD | fetched 39505 | inserted 39052 | up_to_date False (32/37)
+2026-02-18 23:47:17 | [DB] ⏳ UNI/USD | fetched 35612 | inserted 35256 | up_to_date False (33/37)
+2026-02-18 23:47:18 | [DB] ⏳ SUSHI/USD | fetched 40445 | inserted 39977 | up_to_date False (34/37)
+2026-02-18 23:47:43 | [DB] ⏳ YFI/USD | fetched 31225 | inserted 30859 | up_to_date False (35/37)
+2026-02-18 23:47:44 | [DB] ⏳ XTZ/USD | fetched 32435 | inserted 32003 | up_to_date False (36/37)
+2026-02-18 23:47:45 | [DB] ⏳ XRP/USD | fetched 35599 | inserted 35223 | up_to_date False (37/37)
+2026-02-18 23:47:45 | [DB] ✅ Update Complete! You may close this window.
+2026-02-18 23:47:45 | 🧠 [AI] Retraining after DB update...
+2026-02-18 23:48:16 | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.36% | Rows: 90061 | PosRate: 43.09%
+2026-02-18 23:48:31 | ⏳ SOXL | fetched 589 | inserted 0 | up_to_date True (1/12)
+2026-02-18 23:48:31 | ⏳ PLTR | fetched 588 | inserted 0 | up_to_date True (2/12)
+2026-02-18 23:48:31 | ⏳ UBER | fetched 585 | inserted 0 | up_to_date True (3/12)
+2026-02-18 23:48:31 | ⏳ TQQQ | fetched 620 | inserted 0 | up_to_date True (4/12)
+2026-02-18 23:48:31 | ⏳ AMD | fetched 587 | inserted 0 | up_to_date True (5/12)
+2026-02-18 23:48:31 | ⏳ HOOD | fetched 578 | inserted 0 | up_to_date True (6/12)
+2026-02-18 23:48:31 | ⏳ MARA | fetched 552 | inserted 0 | up_to_date True (7/12)
+2026-02-18 23:48:31 | ⏳ COIN | fetched 588 | inserted 0 | up_to_date True (8/12)
+2026-02-18 23:48:31 | ⏳ XLE | fetched 591 | inserted 0 | up_to_date True (9/12)
+2026-02-18 23:48:31 | ⏳ SQQQ | fetched 627 | inserted 0 | up_to_date True (10/12)
+2026-02-18 23:48:31 | ⏳ SOXS | fetched 400 | inserted 0 | up_to_date True (11/12)
+2026-02-18 23:48:31 | ⏳ SPXU | fetched 412 | inserted 0 | up_to_date True (12/12)
+2026-02-18 23:48:31 | ✅ Update Complete! You may close this window.
+2026-02-18 23:49:23 | Starting Backtest...
+2026-02-18 23:49:24 | Backtesting... 5/37
+2026-02-18 23:49:25 | Backtesting... 10/37
+2026-02-18 23:49:25 | Backtesting... 15/37
+2026-02-18 23:49:26 | Backtesting... 20/37
+2026-02-18 23:49:26 | Backtesting... 25/37
+2026-02-18 23:49:27 | Backtesting... 30/37
+2026-02-18 23:49:27 | Backtesting... 35/37
+2026-02-18 23:49:28 | ✅ Backtest Complete.
+2026-02-18 23:52:29 | [SYSTEM] 🚀 v6.15.0 Engine Started (Phase 5 — Shadow data-quality failure scoring)
+2026-02-18 23:52:29 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-18 23:52:29 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-19 00:03:13 | [SYSTEM] 🛑 Stopping Engine...
+2026-02-19 00:03:14 | [SYSTEM] 📄 Run summary written: summary_2026.02.19_00.03.14_paper.json
