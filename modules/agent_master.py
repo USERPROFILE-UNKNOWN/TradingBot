@@ -1219,6 +1219,30 @@ class AgentMaster:
             pass
         return {}
 
+    def _cfg_str(self, section: str, key: str, default: str) -> str:
+        try:
+            return str(self.config.get(section, key, fallback=str(default))).strip()
+        except Exception:
+            return str(default)
+
+    def _cfg_bool(self, section: str, key: str, default: bool) -> bool:
+        try:
+            return self._cfg_str(section, key, str(default)).lower() in {"1", "true", "yes", "y", "on"}
+        except Exception:
+            return bool(default)
+
+    def _cfg_int(self, section: str, key: str, default: int) -> int:
+        try:
+            return int(float(self._cfg_str(section, key, str(default))))
+        except Exception:
+            return int(default)
+
+    def _cfg_float(self, section: str, key: str, default: float) -> float:
+        try:
+            return float(self._cfg_str(section, key, str(default)))
+        except Exception:
+            return float(default)
+
     def _paths_get(self, key: str, default: str = "") -> str:
         try:
             p = getattr(self.db, "paths", None)

@@ -6,7 +6,7 @@ if "%BAT_DIR:~-1%"=="\" set "BAT_DIR=%BAT_DIR:~0,-1%"
 for %%I in ("%BAT_DIR%\..") do set "ROOT_DIR=%%~fI"
 
 echo ==========================================================
-echo      TRADINGBOT TEST RUNNER (v6.15.0)
+echo      TRADINGBOT TEST RUNNER (v6.23.0)
 echo ==========================================================
 echo.
 
