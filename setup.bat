@@ -16,12 +16,11 @@ set "SS=%datetime:~12,2%"
 
 :: --- 2. USER INPUT ---
 echo ==========================================================
-echo      TRADINGBOT SETUP MANAGER (v6.26.0)
+echo      TRADINGBOT SETUP MANAGER (v5.16.2)
 echo ==========================================================
 echo.
-set "DEFAULT_TARGET_VERSION=v6.26.0"
-set /p TARGET_VERSION="Enter Version (e.g. %DEFAULT_TARGET_VERSION%): "
-if "%TARGET_VERSION%"=="" set TARGET_VERSION=%DEFAULT_TARGET_VERSION%
+set /p TARGET_VERSION="Enter Version (e.g. v5.16.2): "
+if "%TARGET_VERSION%"=="" set TARGET_VERSION=v5.16.2
 
 :: Define Log File
 if not exist "%ROOT_DIR%\logs\_setup" mkdir "%ROOT_DIR%\logs\_setup"
@@ -40,9 +39,6 @@ if not "%RC%"=="0" (
     echo [FATAL] Build failed with code %RC%.
     echo [LOGS] Log saved to: %LOG_FILE%
     echo [Check the log file for details]
-    echo.
-    echo [INFO] Last 40 log lines:
-    powershell -NoProfile -Command "if(Test-Path -LiteralPath '%LOG_FILE%'){Get-Content -LiteralPath '%LOG_FILE%' -Tail 40}"
     pause
     exit /b %RC%
 )
@@ -100,7 +96,7 @@ exit /b
     echo.
     echo [STEP 2c] Downloading Intel TBB Redist (Windows x64)...
     
-    REM v6.23.1 FIX: Force .zip extension so Expand-Archive accepts it
+    REM v3.9.23 FIX: Force .zip extension so Expand-Archive accepts it
     set "TBB_VER=2022.3.0.380"
     set "TBB_URL=https://www.nuget.org/api/v2/package/inteltbb.redist.win/%TBB_VER%"
     set "DEPS_DIR=%ROOT_DIR%\build\deps"
@@ -109,27 +105,13 @@ exit /b
     
     if not exist "%DEPS_DIR%" mkdir "%DEPS_DIR%"
     
-    REM Download and Extract using PowerShell (avoid wildcard parsing on [] paths)
+    REM Download and Extract using PowerShell
     echo [INFO] Downloading TBB %TBB_VER% to %TBB_ZIP%...
     powershell -NoProfile -Command ^
         "$ErrorActionPreference='Stop';" ^
-        "$zipPath=[System.IO.Path]::GetFullPath($env:TBB_ZIP);" ^
-        "$extractPath=[System.IO.Path]::GetFullPath($env:TBB_EXTRACT);" ^
-        "$client=New-Object System.Net.WebClient;" ^
-        "$client.DownloadFile($env:TBB_URL,$zipPath);" ^
-        "if(!(Test-Path -LiteralPath $zipPath)){throw 'TBB redist download failed: zip not found.'};" ^
-        "if(Test-Path -LiteralPath $extractPath){Remove-Item -Recurse -Force -LiteralPath $extractPath};" ^
-        "Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force;"
-
-    if errorlevel 1 (
-        echo [FATAL] Intel TBB redist download/extract failed.
-        exit /b 1
-    )
-
-    if not exist "%TBB_ZIP%" (
-        echo [FATAL] Intel TBB redist zip missing after download: %TBB_ZIP%
-        exit /b 1
-    )
+        "Invoke-WebRequest -Uri '%TBB_URL%' -OutFile '%TBB_ZIP%';" ^
+        "if(Test-Path '%TBB_EXTRACT%'){Remove-Item -Recurse -Force '%TBB_EXTRACT%'};" ^
+        "Expand-Archive -Path '%TBB_ZIP%' -DestinationPath '%TBB_EXTRACT%' -Force;"
         
     echo.
     echo [STEP 3] Hunting Dependencies...
@@ -143,7 +125,7 @@ exit /b
     REM 2) Fallback: search anywhere under extraction, prefer win-x64 paths
     if not defined TBB_DLL (
       for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command ^
-        "Get-ChildItem -LiteralPath $env:TBB_EXTRACT -Recurse -Filter tbb12.dll | Sort-Object @{Expression={$_.FullName -notlike '*win-x64*'}}, FullName | Select-Object -First 1 -ExpandProperty FullName"`) do set "TBB_DLL=%%I"
+        "Get-ChildItem -Path '%TBB_EXTRACT%' -Recurse -Filter tbb12.dll | Sort-Object @{Expression={$_.FullName -notlike '*win-x64*'}}, FullName | Select-Object -First 1 -ExpandProperty FullName"`) do set "TBB_DLL=%%I"
     )
 
     if defined TBB_DLL if exist "!TBB_DLL!" (
