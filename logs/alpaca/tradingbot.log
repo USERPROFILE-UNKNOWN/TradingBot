@@ -58,3 +58,24 @@
 2026-02-22 03:23:12,653 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Retrain started...
 2026-02-22 03:23:35,404 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.10% | Rows: 85573 | PosRate: 42.86%
 2026-02-22 03:30:20,420 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.22_03.30.20_paper.json
+2026-02-22 05:00:52,581 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-22 05:00:52,754 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
+2026-02-22 05:00:53,061 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
+2026-02-22 05:01:20,084 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.10% | Rows: 85573 | PosRate: 42.86%
+2026-02-22 05:01:37,294 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-22 05:01:46,807 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ MARA | fetched 562 | inserted 0 | up_to_date True (1/12)
+2026-02-22 05:01:46,833 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ AMD | fetched 587 | inserted 0 | up_to_date True (2/12)
+2026-02-22 05:01:46,834 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ UBER | fetched 588 | inserted 0 | up_to_date True (3/12)
+2026-02-22 05:01:46,843 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ HOOD | fetched 581 | inserted 0 | up_to_date True (4/12)
+2026-02-22 05:01:46,844 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ PLTR | fetched 570 | inserted 0 | up_to_date True (5/12)
+2026-02-22 05:01:47,046 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ COIN | fetched 574 | inserted 0 | up_to_date True (6/12)
+2026-02-22 05:01:47,092 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ SOXS | fetched 460 | inserted 0 | up_to_date True (7/12)
+2026-02-22 05:01:47,102 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ SPXU | fetched 487 | inserted 0 | up_to_date True (8/12)
+2026-02-22 05:01:47,123 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ SOXL | fetched 590 | inserted 0 | up_to_date True (9/12)
+2026-02-22 05:01:47,133 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ XLE | fetched 586 | inserted 0 | up_to_date True (10/12)
+2026-02-22 05:01:47,225 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ SQQQ | fetched 639 | inserted 0 | up_to_date True (11/12)
+2026-02-22 05:01:47,281 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ⏳ TQQQ | fetched 646 | inserted 0 | up_to_date True (12/12)
+2026-02-22 05:01:47,283 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | [DB] ✅ Update Complete! You may close this window.
+2026-02-22 05:01:47,283 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Retraining after DB update...
+2026-02-22 05:02:11,312 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.10% | Rows: 85573 | PosRate: 42.86%
+2026-02-22 05:03:31,359 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | 📄 Run summary written: summary_2026.02.22_05.03.31_paper.json
