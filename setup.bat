@@ -16,11 +16,12 @@ set "SS=%datetime:~12,2%"
 
 :: --- 2. USER INPUT ---
 echo ==========================================================
-echo      TRADINGBOT SETUP MANAGER (v5.16.2)
+echo      TRADINGBOT SETUP MANAGER (v6.26.0)
 echo ==========================================================
 echo.
-set /p TARGET_VERSION="Enter Version (e.g. v5.16.2): "
-if "%TARGET_VERSION%"=="" set TARGET_VERSION=v5.16.2
+set "DEFAULT_TARGET_VERSION=v6.26.0"
+set /p TARGET_VERSION="Enter Version (e.g. %DEFAULT_TARGET_VERSION%): "
+if "%TARGET_VERSION%"=="" set TARGET_VERSION=%DEFAULT_TARGET_VERSION%
 
 :: Define Log File
 if not exist "%ROOT_DIR%\logs\_setup" mkdir "%ROOT_DIR%\logs\_setup"
@@ -39,6 +40,9 @@ if not "%RC%"=="0" (
     echo [FATAL] Build failed with code %RC%.
     echo [LOGS] Log saved to: %LOG_FILE%
     echo [Check the log file for details]
+    echo.
+    echo [INFO] Last 40 log lines:
+    powershell -NoProfile -Command "if(Test-Path -LiteralPath '%LOG_FILE%'){Get-Content -LiteralPath '%LOG_FILE%' -Tail 40}"
     pause
     exit /b %RC%
 )
