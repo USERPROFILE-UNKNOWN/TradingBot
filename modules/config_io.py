@@ -57,16 +57,72 @@ def _new_config_parser() -> configparser.ConfigParser:
 
 def _read_ini_with_fallback(cfg: configparser.ConfigParser, path: str) -> str:
     """Read an INI file robustly across common Windows encodings."""
+    def _merge_loaded_parser(dst: configparser.ConfigParser, src: configparser.ConfigParser) -> None:
+        for sec in src.sections():
+            if not dst.has_section(sec):
+                dst.add_section(sec)
+            for k, v in src.items(sec):
+                dst.set(sec, k, v)
+
+    def _normalize_bare_options(text: str) -> tuple[str, bool]:
+        """Convert bare option lines (`name`) into explicit empty assignments (`name =`)."""
+        out: list[str] = []
+        changed = False
+        for raw in text.splitlines(True):
+            stripped = raw.strip()
+            if (
+                not stripped
+                or stripped.startswith("#")
+                or stripped.startswith(";")
+                or (stripped.startswith("[") and stripped.endswith("]"))
+                or ("=" in stripped)
+                or (":" in stripped)
+            ):
+                out.append(raw)
+                continue
+
+            line_ending = ""
+            core = raw
+            if raw.endswith("\r\n"):
+                line_ending = "\r\n"
+                core = raw[:-2]
+            elif raw.endswith("\n"):
+                line_ending = "\n"
+                core = raw[:-1]
+
+            lead = core[: len(core) - len(core.lstrip(" \t"))]
+            out.append(f"{lead}{stripped} ={line_ending}")
+            changed = True
+        return "".join(out), changed
+
     for enc in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
         try:
-            cfg.read(path, encoding=enc)
+            tmp = _new_config_parser()
+            tmp.read(path, encoding=enc)
+            _merge_loaded_parser(cfg, tmp)
             return enc
         except UnicodeDecodeError:
             continue
+        except configparser.ParsingError:
+            try:
+                with open(path, "r", encoding=enc, errors="replace") as f:
+                    normalized, changed = _normalize_bare_options(f.read())
+                if not changed:
+                    continue
+
+                tmp = _new_config_parser()
+                tmp.read_string(normalized, source=path)
+                _merge_loaded_parser(cfg, tmp)
+                return f"{enc}+normalized"
+            except Exception:
+                continue
 
     # Last resort: avoid hard crash
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        cfg.read_file(f, source=path)
+        normalized, _ = _normalize_bare_options(f.read())
+    tmp = _new_config_parser()
+    tmp.read_string(normalized, source=path)
+    _merge_loaded_parser(cfg, tmp)
     return "utf-8+replace"
 
 
