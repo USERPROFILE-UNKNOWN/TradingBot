@@ -3,7 +3,7 @@ modules/research/quick_backtest.py
 
 Quick sanity backtest utilities (stdlib + numpy/pandas only).
 
-Used by TradingView autovalidation (PAPER-only) to run a lightweight
+Used by candidate validation flows to run a lightweight
 strategy replay over the last N days and return a compact result bundle.
 
 This intentionally duplicates (and keeps compatible with) the backtest

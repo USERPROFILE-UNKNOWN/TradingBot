@@ -12,7 +12,7 @@ def test_ensure_split_config_layout_keeps_existing_config_ini_unchanged(tmp_path
         "strict_config_validation = False\n"
         "\n"
         "#  ==========================\n"
-        "# TRADINGVIEW (Webhook Integration)\n"
+        "# LEGACY BLOCK (kept verbatim)\n"
         "#  ==========================\n"
         "enabled = False\n"
     )

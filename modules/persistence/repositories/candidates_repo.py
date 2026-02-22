@@ -96,7 +96,7 @@ class CandidatesRepo(RepoBase):
     def get_latest_candidates(self, limit: int = 200):
         conn = self._conn("decision_logs")
         lock = self._lock("decision_logs")
-        """Return latest candidate rows (prefer TradingView universe)."""
+        """Return latest candidate rows for the newest scan_id."""
         with lock:
             try:
                 cur = conn.cursor()
@@ -106,17 +106,6 @@ class CandidatesRepo(RepoBase):
                     return pd.DataFrame()
                 sid = row[0]
 
-                # TradingView latest
-                q_tv = """
-                    SELECT scan_id, scan_ts, universe, policy, symbol, score, reason, details_json, signals_json
-                    FROM candidates
-                    WHERE scan_id=? AND UPPER(universe)='TRADINGVIEW'
-                    ORDER BY score DESC
-                    LIMIT ?
-                """
-                df_tv = pd.read_sql_query(q_tv, conn, params=(sid, int(max(limit, 200))))
-
-                # fallback non-TV latest
                 q = """
                     SELECT scan_id, scan_ts, universe, policy, symbol, score, reason, details_json, signals_json
                     FROM candidates
@@ -129,24 +118,13 @@ class CandidatesRepo(RepoBase):
             except Exception:
                 return pd.DataFrame()
 
-        frames = []
-        if isinstance(df_tv, pd.DataFrame) and not df_tv.empty:
-            frames.append(df_tv)
-        if isinstance(df_latest, pd.DataFrame) and not df_latest.empty:
-            frames.append(df_latest)
-
-        if not frames:
+        if not isinstance(df_latest, pd.DataFrame) or df_latest.empty:
             return pd.DataFrame()
 
-        df = pd.concat(frames, ignore_index=True)
         try:
-            df['universe'] = df.get('universe').fillna('')
-            # Prefer TradingView rows on symbol collisions.
-            df['_pri'] = (df['universe'].astype(str).str.upper() != 'TRADINGVIEW').astype(int)
-            df = df.sort_values(by=['_pri', 'score', 'scan_ts'], ascending=[True, False, False], kind='mergesort')
+            df = df_latest.copy()
+            df = df.sort_values(by=['score', 'scan_ts'], ascending=[False, False], kind='mergesort')
             df = df.drop_duplicates(subset=['symbol'], keep='first')
-            df = df.head(int(limit))
-            df = df.drop(columns=['_pri'], errors='ignore')
+            return df.head(int(limit))
         except Exception:
-            pass
-        return df
+            return df_latest

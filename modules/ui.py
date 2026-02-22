@@ -718,11 +718,39 @@ class TradingApp(ctk.CTk):
         vals = self.paths.get("available_platforms") or [self.paths.get("platform", "alpaca")]
         return [str(v).capitalize() for v in vals]
 
+    def _normalize_platform(self, value: str) -> str:
+        return str(value or "").strip().lower()
+
+    def _on_platform_selected(self, selected_label: str):
+        selected = self._normalize_platform(selected_label)
+        current = self._normalize_platform(self.paths.get("platform"))
+        if not selected or selected == current:
+            return
+
+        try:
+            self.log(f"🔄 Switching platform: {current or 'unknown'} -> {selected}")
+        except Exception:
+            pass
+
+        try:
+            os.environ["TRADINGBOT_PLATFORM"] = selected
+        except Exception:
+            pass
+
+        # Reload paths/config/db/UI by restarting process.
+        try:
+            self.after(100, lambda: os.execl(sys.executable, sys.executable, *sys.argv))
+        except Exception as e:
+            try:
+                self.log(f"❌ Platform switch failed: {e}")
+            except Exception:
+                pass
+
     def _add_platform_selector(self, parent):
         holder = ctk.CTkFrame(parent, fg_color="transparent")
         holder.pack(fill="x", padx=10, pady=(8, 0))
         ctk.CTkLabel(holder, text="Platform:", width=80).pack(side="left")
-        opt = ctk.CTkOptionMenu(holder, values=self._platform_values(), command=lambda _v: None)
+        opt = ctk.CTkOptionMenu(holder, values=self._platform_values(), command=self._on_platform_selected)
         opt.pack(side="left")
         try:
             opt.set((self.paths.get("platform") or "alpaca").capitalize())

@@ -1068,7 +1068,7 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
 
         # Keep file stable: do not auto-append defaults into existing user INI files.
         cfg_desc = {
-            "db_dir": "Directory containing split DB files (relative paths resolve from TradingBot/config/).",
+            "db_dir": "Directory containing split DB files (relative paths resolve from TradingBot root).",
             "update_db_lookback_days": "How many day(s) of 1-minute candles Update DB should pull.",
             "promotion_enabled": "Enable/disable paper -> live promotion evaluation.",
             "promotion_window_days": "How many days of paper evidence to consider for promotion evaluation.",

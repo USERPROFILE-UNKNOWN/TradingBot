@@ -6,7 +6,7 @@ import types
 # Avoid optional heavy dependency during test collection.
 sys.modules.setdefault("pandas", types.ModuleType("pandas"))
 
-from modules.startup_paths import resolve_db_placeholder_path
+from modules.startup_paths import migrate_root_db_to_platform, resolve_db_placeholder_path
 from modules.database import DataManager
 from modules.paths import get_paths
 from modules.config_io import _repair_legacy_db_folder_layout
@@ -99,3 +99,46 @@ def test_load_split_config_uses_legacy_root_watchlist_and_keys_if_platform_files
     cfg = load_split_config(paths)
     assert cfg.get("WATCHLIST_ACTIVE_STOCK", "AMD") == "Electronic technology"
     assert cfg.get("KEYS", "paper_alpaca_key") == "k"
+
+
+def test_datamanager_read_db_dir_prefers_platform_when_config_is_plain_db():
+    dm = DataManager.__new__(DataManager)
+    cfg = _cfg("db")
+    paths = {"root": "/app", "db_dir": "/app/db/alpaca"}
+    got = dm._read_db_dir("/app/db/market_data.db", cfg, paths)
+    assert got == os.path.normpath("/app/db/alpaca")
+
+
+def test_migrate_root_db_to_platform_moves_legacy_root_db_files(tmp_path):
+    root = tmp_path / "TradingBot"
+    legacy = root / "db"
+    target = root / "db" / "alpaca"
+    legacy.mkdir(parents=True)
+
+    (legacy / "historical_prices.db").write_text("x", encoding="utf-8")
+    (legacy / "trade_history.db").write_text("x", encoding="utf-8")
+    (legacy / "notes.txt").write_text("ignore", encoding="utf-8")
+
+    moved = migrate_root_db_to_platform({"root": str(root), "db_dir": str(target)})
+
+    assert moved == 2
+    assert (target / "historical_prices.db").exists()
+    assert (target / "trade_history.db").exists()
+    assert (legacy / "notes.txt").exists()
+
+
+def test_migrate_root_db_to_platform_skips_when_target_has_split_files(tmp_path):
+    root = tmp_path / "TradingBot"
+    legacy = root / "db"
+    target = root / "db" / "alpaca"
+    target.mkdir(parents=True)
+    legacy.mkdir(parents=True, exist_ok=True)
+
+    (legacy / "historical_prices.db").write_text("legacy", encoding="utf-8")
+    (target / "historical_prices.db").write_text("target", encoding="utf-8")
+
+    moved = migrate_root_db_to_platform({"root": str(root), "db_dir": str(target)})
+
+    assert moved == 0
+    assert (legacy / "historical_prices.db").exists()
+    assert (target / "historical_prices.db").read_text(encoding="utf-8") == "target"

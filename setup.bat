@@ -96,7 +96,7 @@ exit /b
     echo.
     echo [STEP 2c] Downloading Intel TBB Redist (Windows x64)...
     
-    REM v3.9.23 FIX: Force .zip extension so Expand-Archive accepts it
+    REM v6.23.1 FIX: Force .zip extension so Expand-Archive accepts it
     set "TBB_VER=2022.3.0.380"
     set "TBB_URL=https://www.nuget.org/api/v2/package/inteltbb.redist.win/%TBB_VER%"
     set "DEPS_DIR=%ROOT_DIR%\build\deps"
@@ -105,13 +105,27 @@ exit /b
     
     if not exist "%DEPS_DIR%" mkdir "%DEPS_DIR%"
     
-    REM Download and Extract using PowerShell
+    REM Download and Extract using PowerShell (avoid wildcard parsing on [] paths)
     echo [INFO] Downloading TBB %TBB_VER% to %TBB_ZIP%...
     powershell -NoProfile -Command ^
         "$ErrorActionPreference='Stop';" ^
-        "Invoke-WebRequest -Uri '%TBB_URL%' -OutFile '%TBB_ZIP%';" ^
-        "if(Test-Path '%TBB_EXTRACT%'){Remove-Item -Recurse -Force '%TBB_EXTRACT%'};" ^
-        "Expand-Archive -Path '%TBB_ZIP%' -DestinationPath '%TBB_EXTRACT%' -Force;"
+        "$zipPath=[System.IO.Path]::GetFullPath('%TBB_ZIP%');" ^
+        "$extractPath=[System.IO.Path]::GetFullPath('%TBB_EXTRACT%');" ^
+        "$client=New-Object System.Net.WebClient;" ^
+        "$client.DownloadFile('%TBB_URL%',$zipPath);" ^
+        "if(!(Test-Path -LiteralPath $zipPath)){throw 'TBB redist download failed: zip not found.'};" ^
+        "if(Test-Path -LiteralPath $extractPath){Remove-Item -Recurse -Force -LiteralPath $extractPath};" ^
+        "Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force;"
+
+    if errorlevel 1 (
+        echo [FATAL] Intel TBB redist download/extract failed.
+        exit /b 1
+    )
+
+    if not exist "%TBB_ZIP%" (
+        echo [FATAL] Intel TBB redist zip missing after download: %TBB_ZIP%
+        exit /b 1
+    )
         
     echo.
     echo [STEP 3] Hunting Dependencies...

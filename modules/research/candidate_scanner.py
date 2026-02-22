@@ -112,13 +112,13 @@ class CandidateScanner:
         self,
         symbol: str,
         *,
-        universe: str = "TRADINGVIEW",
+        universe: str = "SCANNER",
         extra_details: Optional[Dict[str, Any]] = None,
         force_accept: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Score one symbol using the same scoring model as scan_today.
 
-        Intended for real-time candidate sources (e.g., TradingView alerts).
+        Intended for real-time candidate sources (e.g., external signal feeds).
         Returns a DB-ready candidate row dict, or None if symbol is empty.
 
         Notes:
@@ -146,7 +146,7 @@ class CandidateScanner:
                 min_bars=min_bars,
                 min_dollar_volume=min_dv,
                 include_negative_movers=True,
-                universe=(universe or "TRADINGVIEW").strip().upper(),
+                universe=(universe or "SCANNER").strip().upper(),
             )
         except Exception:
             r = None
@@ -168,7 +168,7 @@ class CandidateScanner:
             dv = 0.0
             vol = 0.0
             bars = 0
-            uni = (universe or "TRADINGVIEW").strip().upper()
+            uni = (universe or "SCANNER").strip().upper()
         else:
             details = dict(r.details or {})
             score = float(r.score or 0.0)
@@ -176,7 +176,7 @@ class CandidateScanner:
             dv = float(r.dollar_volume or 0.0)
             vol = float(r.volatility or 0.0)
             bars = int(r.bars or 0)
-            uni = (r.universe or universe or "TRADINGVIEW").strip().upper()
+            uni = (r.universe or universe or "SCANNER").strip().upper()
 
         if extra_details:
             try:

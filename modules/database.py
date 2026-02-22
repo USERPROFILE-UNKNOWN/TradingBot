@@ -258,6 +258,12 @@ class DataManager:
             raw = os.path.expandvars(os.path.expanduser(raw))
             if os.path.isabs(raw):
                 return os.path.normpath(raw)
+
+            # v6.24.0: when config still says plain "db", prefer platform-scoped paths["db_dir"].
+            # This keeps legacy config.ini from forcing root-level DB layout.
+            if os.path.normpath(raw).lower() == os.path.normpath("db") and (paths or {}).get("db_dir"):
+                return os.path.normpath(paths["db_dir"])
+
             base = (paths or {}).get("root") or os.path.dirname(db_path)
             return os.path.normpath(os.path.join(base, raw))
 

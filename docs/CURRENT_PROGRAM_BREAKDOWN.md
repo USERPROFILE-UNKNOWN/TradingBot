@@ -58,7 +58,7 @@ The startup entrypoint is `main.py`, which loads config, validates it, initializ
   - daily reporting,
   - research sweep,
   - canary guardrails,
-  - TradingView autovalidation pump.
+  - candidate validation pump.
 
 `Governance` enforces scope validity, live-change limits, promotion/config-tuning toggles, and risk limits (`agent_live_max_exposure_pct`, canary caps, challenger underperformance guard).
 

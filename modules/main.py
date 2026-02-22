@@ -4,7 +4,7 @@ import logging
 from modules.config_validate import validate_runtime_config
 from modules.database import DataManager
 from modules.logging_utils import configure_logging, get_logger
-from modules.startup_paths import resolve_db_placeholder_path
+from modules.startup_paths import migrate_root_db_to_platform, resolve_db_placeholder_path
 from modules.ui import TradingApp
 from modules.utils import (
     ensure_split_config_layout,
@@ -116,6 +116,11 @@ def main():
         log.exception("[E_STARTUP_SANITIZER_READ_FAIL] Failed to read sanitizer report")
 
     # 4) Resolve + init Database
+    try:
+        migrate_root_db_to_platform(paths, log_fn=lambda m: log.info(m))
+    except Exception:
+        log.exception("[E_DB_PLATFORM_MIGRATION_FAIL] Root->platform DB migration failed")
+
     db_path = resolve_db_placeholder_path(paths, config)
     try:
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
