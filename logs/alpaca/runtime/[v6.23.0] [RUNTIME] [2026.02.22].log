@@ -19,3 +19,44 @@
 2026-02-22 03:02:00 | ⏳ TQQQ | fetched 8863 | inserted 8664 | up_to_date False (12/12)
 2026-02-22 03:02:00 | ✅ Update Complete! You may close this window.
 2026-02-22 03:02:00 | [SYSTEM] 📄 Run summary written: summary_2026.02.22_03.02.00_paper.json
+2026-02-22 03:13:56 | --- START v6.23.0 | Phase 5 — Shadow data-quality failure scoring ---
+2026-02-22 03:13:56 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-22 03:13:56 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-22 03:13:56 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-22 03:14:21 | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.10% | Rows: 85573 | PosRate: 42.86%
+2026-02-22 03:14:29 | [DB] ⏳ MARA | fetched 562 | inserted 0 | up_to_date True (1/12)
+2026-02-22 03:14:29 | [DB] ⏳ UBER | fetched 588 | inserted 0 | up_to_date True (2/12)
+2026-02-22 03:14:29 | [DB] ⏳ HOOD | fetched 581 | inserted 0 | up_to_date True (3/12)
+2026-02-22 03:14:29 | [DB] ⏳ AMD | fetched 587 | inserted 0 | up_to_date True (4/12)
+2026-02-22 03:14:29 | [DB] ⏳ PLTR | fetched 570 | inserted 0 | up_to_date True (5/12)
+2026-02-22 03:14:29 | [DB] ⏳ COIN | fetched 574 | inserted 0 | up_to_date True (6/12)
+2026-02-22 03:14:29 | [DB] ⏳ XLE | fetched 586 | inserted 0 | up_to_date True (7/12)
+2026-02-22 03:14:29 | [DB] ⏳ SOXS | fetched 460 | inserted 0 | up_to_date True (8/12)
+2026-02-22 03:14:29 | [DB] ⏳ SPXU | fetched 487 | inserted 0 | up_to_date True (9/12)
+2026-02-22 03:14:29 | [DB] ⏳ SOXL | fetched 590 | inserted 0 | up_to_date True (10/12)
+2026-02-22 03:14:30 | [DB] ⏳ SQQQ | fetched 639 | inserted 0 | up_to_date True (11/12)
+2026-02-22 03:14:30 | [DB] ⏳ TQQQ | fetched 646 | inserted 0 | up_to_date True (12/12)
+2026-02-22 03:14:30 | [DB] ✅ Update Complete! You may close this window.
+2026-02-22 03:14:30 | 🧠 [AI] Retraining after DB update...
+2026-02-22 03:14:37 | [WATCHLIST] Crypto stable set selected: [] (universe=0, lookback=390)
+2026-02-22 03:14:52 | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.10% | Rows: 85573 | PosRate: 42.86%
+2026-02-22 03:18:57 | ⏳ HOOD | fetched 581 | inserted 0 | up_to_date True (1/12)
+2026-02-22 03:18:57 | ⏳ PLTR | fetched 570 | inserted 0 | up_to_date True (2/12)
+2026-02-22 03:18:58 | ⏳ UBER | fetched 588 | inserted 0 | up_to_date True (3/12)
+2026-02-22 03:18:58 | ⏳ MARA | fetched 562 | inserted 0 | up_to_date True (4/12)
+2026-02-22 03:18:58 | ⏳ AMD | fetched 587 | inserted 0 | up_to_date True (5/12)
+2026-02-22 03:18:58 | ⏳ COIN | fetched 574 | inserted 0 | up_to_date True (6/12)
+2026-02-22 03:18:58 | ⏳ XLE | fetched 586 | inserted 0 | up_to_date True (7/12)
+2026-02-22 03:18:58 | ⏳ SOXS | fetched 460 | inserted 0 | up_to_date True (8/12)
+2026-02-22 03:18:58 | ⏳ SOXL | fetched 590 | inserted 0 | up_to_date True (9/12)
+2026-02-22 03:18:58 | ⏳ SPXU | fetched 487 | inserted 0 | up_to_date True (10/12)
+2026-02-22 03:18:58 | ⏳ SQQQ | fetched 639 | inserted 0 | up_to_date True (11/12)
+2026-02-22 03:18:58 | ⏳ TQQQ | fetched 646 | inserted 0 | up_to_date True (12/12)
+2026-02-22 03:18:58 | ✅ Update Complete! You may close this window.
+2026-02-22 03:21:49 | Starting Backtest...
+2026-02-22 03:21:49 | Backtesting... 5/12
+2026-02-22 03:21:50 | Backtesting... 10/12
+2026-02-22 03:21:50 | ✅ Backtest Complete.
+2026-02-22 03:23:12 | 🧠 [AI] Retrain started...
+2026-02-22 03:23:35 | 🧠 [AI] Model Trained (v2). Holdout Accuracy: 81.10% | Rows: 85573 | PosRate: 42.86%
+2026-02-22 03:30:20 | [SYSTEM] 📄 Run summary written: summary_2026.02.22_03.30.20_paper.json

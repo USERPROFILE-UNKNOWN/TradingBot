@@ -1,0 +1,214 @@
+{
+  "engine": {
+    "version": "v6.23.0",
+    "release": "Phase 5 \u2014 Shadow data-quality failure scoring",
+    "session_id": "2026.02.22_03.30.20",
+    "started_at": "2026-02-22 03:30:20.367666",
+    "ended_at": "2026-02-22 03:30:20.367694",
+    "duration_seconds": 2.8e-05,
+    "stop_reason": null,
+    "session_tag": "paper"
+  },
+  "equity": {
+    "start_equity": 2000.0,
+    "end_equity": 2000.0,
+    "pl_dollars": 0.0
+  },
+  "order_lifecycle": {
+    "submitted": 0,
+    "filled": 0,
+    "canceled": 0,
+    "rejected": 0,
+    "expired": 0,
+    "ttl_canceled": 0
+  },
+  "trades_session": {
+    "count": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "total_pl": 0.0,
+    "avg_pl": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "profit_factor": 0.0,
+    "expectancy": 0.0,
+    "max_drawdown_pl": 0.0,
+    "by_strategy": {}
+  },
+  "decisions_session": {},
+  "data_freshness": {
+    "threshold_seconds": 180,
+    "stale_symbols": [
+      "AMD",
+      "COIN",
+      "HOOD",
+      "MARA",
+      "PLTR",
+      "SOXL",
+      "SOXS",
+      "SPXU",
+      "SQQQ",
+      "TQQQ",
+      "UBER",
+      "XLE"
+    ],
+    "symbol_age_seconds": {
+      "AMD": 131480.405176,
+      "COIN": 131480.405176,
+      "HOOD": 131480.405176,
+      "MARA": 131480.405176,
+      "PLTR": 131480.405176,
+      "SOXL": 131480.405176,
+      "SOXS": 129080.405176,
+      "SPXU": 131420.405176,
+      "SQQQ": 128240.405176,
+      "TQQQ": 128480.405176,
+      "UBER": 131480.405176,
+      "XLE": 131420.405176
+    },
+    "oldest_age_seconds": 131480.405176
+  },
+  "ai": {
+    "status": "trained",
+    "rows": 85573,
+    "pos_rate": 0.4286398747268414,
+    "symbols": [
+      "AMD",
+      "COIN",
+      "HOOD",
+      "MARA",
+      "PLTR",
+      "SOXL",
+      "SOXS",
+      "SPXU",
+      "SQQQ",
+      "TQQQ",
+      "UBER",
+      "XLE"
+    ],
+    "rows_by_symbol": {
+      "AMD": 7356,
+      "COIN": 7315,
+      "HOOD": 7406,
+      "MARA": 7712,
+      "PLTR": 7369,
+      "SOXL": 7546,
+      "SOXS": 5495,
+      "SPXU": 3542,
+      "SQQQ": 8213,
+      "TQQQ": 8599,
+      "UBER": 7497,
+      "XLE": 7523
+    },
+    "label": {
+      "horizon_bars": 60,
+      "tp_atr_mult": 1.5,
+      "sl_atr_mult": 1.0,
+      "min_return_pct": 0.001,
+      "method": "triple_barrier"
+    },
+    "calibration": {
+      "method": "sigmoid",
+      "fraction": 0.2
+    },
+    "walkforward": {
+      "splits": 3,
+      "fold_metrics": [
+        {
+          "accuracy": 0.8082550366942458,
+          "auc": 0.8990521184245486,
+          "brier": 0.1283022964625232,
+          "log_loss": 0.39399595962753386,
+          "fold": 1,
+          "train_rows": 21394,
+          "test_rows": 21393
+        },
+        {
+          "accuracy": 0.8026924694993689,
+          "auc": 0.8904830523495849,
+          "brier": 0.13273792873289336,
+          "log_loss": 0.4086136380257646,
+          "fold": 2,
+          "train_rows": 42787,
+          "test_rows": 21393
+        },
+        {
+          "accuracy": 0.8110129481606133,
+          "auc": 0.895183541347335,
+          "brier": 0.12867017473673317,
+          "log_loss": 0.39725430633832964,
+          "fold": 3,
+          "train_rows": 64180,
+          "test_rows": 21393
+        }
+      ],
+      "walkforward_accuracy_mean": 0.8073201514514093,
+      "walkforward_accuracy_std": 0.0034605490027846695,
+      "walkforward_auc_mean": 0.8949062373738229,
+      "walkforward_auc_std": 0.003503797603512272,
+      "walkforward_brier_mean": 0.12990346664404992,
+      "walkforward_brier_std": 0.002009886415692359,
+      "walkforward_log_loss_mean": 0.39995463466387604,
+      "walkforward_log_loss_std": 0.006265671564849034
+    },
+    "holdout": {
+      "accuracy": 0.8110129481606133,
+      "auc": 0.895183541347335,
+      "brier": 0.12867017473673317,
+      "log_loss": 0.39725430633832964,
+      "fold": 3,
+      "train_rows": 64180,
+      "test_rows": 21393
+    }
+  },
+  "watchdog": {
+    "e5_enabled": true,
+    "enforced": false,
+    "entries_disabled": false,
+    "entries_disabled_reason": null,
+    "window_seconds": 900,
+    "api_errors_in_window": 0,
+    "rejects_in_window": 0,
+    "ttl_cancels_in_window": 0
+  },
+  "promotion_status": {
+    "enabled": true,
+    "eligible": false,
+    "checked_sessions": 1,
+    "window_days": 30,
+    "requirements": {
+      "min_sessions": 5,
+      "min_trades_total": 30,
+      "max_drawdown_pct": 4.0,
+      "max_daily_loss_pct": 2.0,
+      "max_cancel_rate_pct": 35.0,
+      "max_reject_rate_pct": 10.0,
+      "max_api_errors_per_hour": 20,
+      "require_no_stale_symbols": true,
+      "require_no_watchdog_halts": true,
+      "require_no_crashes": true,
+      "market_hours_local": "08:30-15:00 America/Chicago"
+    },
+    "computed_metrics": {
+      "total_trades": 0,
+      "worst_drawdown_pct": 0.0,
+      "worst_session_loss_pct": 0.0,
+      "cancel_rate_pct": null,
+      "reject_rate_pct": null,
+      "max_api_errors_per_hour": 0.0,
+      "stale_sessions_during_market_hours": 0,
+      "watchdog_halt_sessions": 0,
+      "crash_sessions": 0,
+      "orders_submitted_total": 0
+    },
+    "failed_checks": [
+      "min_sessions_not_met",
+      "min_trades_total_not_met"
+    ],
+    "notes": [
+      "cancel_rate_not_computed_no_submitted_orders",
+      "reject_rate_not_computed_no_submitted_orders"
+    ]
+  }
+}
