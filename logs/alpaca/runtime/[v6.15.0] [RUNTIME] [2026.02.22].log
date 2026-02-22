@@ -1,0 +1,5 @@
+2026-02-22 02:37:11 | --- START v6.15.0 | Phase 5 — Shadow data-quality failure scoring ---
+2026-02-22 02:37:33 | [SYSTEM] ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-22 02:37:33 | [SYNC] 🔄 Syncing Alpaca positions to Database...
+2026-02-22 02:37:34 | [SYNC] ℹ️ Sync skipped (no broker positions available)
+2026-02-22 02:37:34 | 🧠 [AI] Not enough data to train.

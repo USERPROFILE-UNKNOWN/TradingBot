@@ -1,0 +1,41 @@
+2026-02-22 02:37:11,480 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_stale_quarantine_warmup_minutes; using default=45
+2026-02-22 02:37:11,481 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_candidate_scan_enabled; using default=True
+2026-02-22 02:37:11,481 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_candidate_scan_interval_minutes; using default=60
+2026-02-22 02:37:11,481 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_candidate_simulation_enabled; using default=True
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_candidate_simulation_interval_minutes; using default=60
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_candidate_simulation_max_symbols; using default=10
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_candidate_simulation_run_after_scan; using default=True
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_watchlist_policy_enabled; using default=True
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_watchlist_policy_interval_minutes; using default=60
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_watchlist_policy_max_churn_per_run; using default=10
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_watchlist_policy_run_after_simulation; using default=True
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_quick_backtest_enabled; using default=True
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_quick_backtest_interval_minutes; using default=1440
+2026-02-22 02:37:11,482 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_quick_backtest_max_symbols; using default=10
+2026-02-22 02:37:11,483 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_quick_backtest_days; using default=14
+2026-02-22 02:37:11,483 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_quick_backtest_max_strategies; using default=6
+2026-02-22 02:37:11,483 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_quick_backtest_min_trades; using default=1
+2026-02-22 02:37:11,483 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_full_backtest_enabled; using default=False
+2026-02-22 02:37:11,483 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_full_backtest_interval_minutes; using default=1440
+2026-02-22 02:37:11,483 | WARNING | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [CONFIG] Missing CONFIGURATION.agent_full_backtest_hour_utc; using default=2
+2026-02-22 02:37:33,557 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | ✅ API Connected (https://paper-api.alpaca.markets)
+2026-02-22 02:37:33,728 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | 🔄 Syncing Alpaca positions to Database...
+2026-02-22 02:37:34,018 | INFO | modules.ui | component=engine mode=PAPER symbol=- order_id=- strategy=- | ℹ️ Sync skipped (no broker positions available)
+2026-02-22 02:37:34,080 | INFO | modules.ui | component=ui mode=PAPER symbol=- order_id=- strategy=- | 🧠 [AI] Not enough data to train.
+2026-02-22 02:37:34,086 | ERROR | __main__ | component=startup mode=PAPER symbol=- order_id=- strategy=- | [E_UI_INIT_FAIL] TradingApp initialization failed
+Traceback (most recent call last):
+  File "modules\main.py", line 133, in main
+    app = TradingApp(config, db_manager)
+  File "modules\ui.py", line 101, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "modules\ui.py", line 220, in setup_ui
+    self.agent_master = AgentMaster(self.config, self.db_manager, self.log)
+                        ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "modules\agent_master.py", line 55, in __init__
+    self._register_jobs()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "modules\agent_master.py", line 185, in _register_jobs
+    if self._cfg_bool("CONFIGURATION", "agent_db_integrity_check_enabled", True):
+       ^^^^^^^^^^^^^^
+AttributeError: 'AgentMaster' object has no attribute '_cfg_bool'
