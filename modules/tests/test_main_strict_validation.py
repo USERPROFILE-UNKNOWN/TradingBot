@@ -24,6 +24,12 @@ def _base_cfg(*, strict: bool, amount_to_trade: str) -> configparser.ConfigParse
     return c
 
 
+def _base_cfg_with_mode(*, strict: bool, amount_to_trade: str, agent_mode: str) -> configparser.ConfigParser:
+    c = _base_cfg(strict=strict, amount_to_trade=amount_to_trade)
+    c["CONFIGURATION"]["agent_mode"] = str(agent_mode)
+    return c
+
+
 def _bootstrap_main_with_dummies(monkeypatch, tmp_path):
     """Patch heavyweight startup dependencies and return (main, app_created dict)."""
     sys.modules.setdefault("pandas", types.ModuleType("pandas"))
@@ -149,7 +155,44 @@ def test_main_boots_without_broker_credentials(monkeypatch, tmp_path, caplog):
 
 def test_main_raises_on_strict_missing_credentials(monkeypatch, tmp_path, caplog):
     main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
-    monkeypatch.setattr(main, "load_split_config", lambda _paths: _base_cfg(strict=True, amount_to_trade="100"))
+    monkeypatch.setattr(
+        main,
+        "load_split_config",
+        lambda _paths: _base_cfg_with_mode(strict=True, amount_to_trade="100", agent_mode="LIVE"),
+    )
+    monkeypatch.setattr(main, "get_last_config_sanitizer_report", lambda: None)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="Configuration validation failed in strict mode"):
+            main.main()
+
+    assert app_created["value"] is False
+    assert any("KEYS.alpaca_key is empty" in rec.message for rec in caplog.records)
+
+
+def test_main_strict_non_live_allows_missing_credentials(monkeypatch, tmp_path, caplog):
+    main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        main,
+        "load_split_config",
+        lambda _paths: _base_cfg_with_mode(strict=True, amount_to_trade="100", agent_mode="PAPER"),
+    )
+    monkeypatch.setattr(main, "get_last_config_sanitizer_report", lambda: None)
+
+    with caplog.at_level(logging.WARNING):
+        main.main()
+
+    assert app_created["value"] is True
+    assert any("KEYS.alpaca_key is empty" in rec.message for rec in caplog.records)
+
+
+def test_main_strict_live_requires_credentials(monkeypatch, tmp_path, caplog):
+    main, app_created = _bootstrap_main_with_dummies(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        main,
+        "load_split_config",
+        lambda _paths: _base_cfg_with_mode(strict=True, amount_to_trade="100", agent_mode="LIVE"),
+    )
     monkeypatch.setattr(main, "get_last_config_sanitizer_report", lambda: None)
 
     with caplog.at_level(logging.ERROR):

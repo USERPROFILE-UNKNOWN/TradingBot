@@ -30,6 +30,18 @@ def _read_agent_mode(config) -> str:
     return str(raw or "OFF").strip().upper() or "OFF"
 
 
+def _should_require_credentials_for_validation(config, *, strict_mode: bool) -> bool:
+    """Require broker credentials only for strict LIVE startup.
+
+    Strict validation remains a schema/type/range gate for all modes, but blocking
+    startup on missing API credentials is reserved for LIVE mode so users can still
+    open the app and repair keys in PAPER/ADVISORY/OFF.
+    """
+    if not strict_mode:
+        return False
+    return _read_agent_mode(config) == "LIVE"
+
+
 def main():
     # 1) Setup Paths
     paths = get_paths()
@@ -67,7 +79,11 @@ def main():
 
     # 3.1) Validate runtime config (strict mode optional)
     strict_mode = _is_strict_validation_enabled(config)
-    repv = validate_runtime_config(config, strict=strict_mode, require_credentials=strict_mode)
+    repv = validate_runtime_config(
+        config,
+        strict=strict_mode,
+        require_credentials=_should_require_credentials_for_validation(config, strict_mode=strict_mode),
+    )
     for warning in repv.warnings:
         log.warning("[CONFIG] %s", warning)
 
