@@ -113,10 +113,10 @@ exit /b
     echo [INFO] Downloading TBB %TBB_VER% to %TBB_ZIP%...
     powershell -NoProfile -Command ^
         "$ErrorActionPreference='Stop';" ^
-        "$zipPath=[System.IO.Path]::GetFullPath('%TBB_ZIP%');" ^
-        "$extractPath=[System.IO.Path]::GetFullPath('%TBB_EXTRACT%');" ^
+        "$zipPath=[System.IO.Path]::GetFullPath($env:TBB_ZIP);" ^
+        "$extractPath=[System.IO.Path]::GetFullPath($env:TBB_EXTRACT);" ^
         "$client=New-Object System.Net.WebClient;" ^
-        "$client.DownloadFile('%TBB_URL%',$zipPath);" ^
+        "$client.DownloadFile($env:TBB_URL,$zipPath);" ^
         "if(!(Test-Path -LiteralPath $zipPath)){throw 'TBB redist download failed: zip not found.'};" ^
         "if(Test-Path -LiteralPath $extractPath){Remove-Item -Recurse -Force -LiteralPath $extractPath};" ^
         "Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force;"
@@ -143,7 +143,7 @@ exit /b
     REM 2) Fallback: search anywhere under extraction, prefer win-x64 paths
     if not defined TBB_DLL (
       for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command ^
-        "Get-ChildItem -Path '%TBB_EXTRACT%' -Recurse -Filter tbb12.dll | Sort-Object @{Expression={$_.FullName -notlike '*win-x64*'}}, FullName | Select-Object -First 1 -ExpandProperty FullName"`) do set "TBB_DLL=%%I"
+        "Get-ChildItem -LiteralPath $env:TBB_EXTRACT -Recurse -Filter tbb12.dll | Sort-Object @{Expression={$_.FullName -notlike '*win-x64*'}}, FullName | Select-Object -First 1 -ExpandProperty FullName"`) do set "TBB_DLL=%%I"
     )
 
     if defined TBB_DLL if exist "!TBB_DLL!" (
