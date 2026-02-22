@@ -206,13 +206,6 @@ def _validate_field(config, spec: FieldSpec, rep: ConfigValidationReport, *, str
 # KEYS.alpaca_secret | str | no | ***REDACTED*** | required only when require_credentials=True
 # KEYS.telegram_token | str | no | ***REDACTED*** | warn when telegram_enabled=True
 # KEYS.telegram_chat_id | str | no | ***REDACTED*** | warn when telegram_enabled=True
-# TRADINGVIEW.enabled | bool | no | False | If True, start webhook listener
-# TRADINGVIEW.listen_host | str | no | 127.0.0.1 | Bind address (recommend 127.0.0.1)
-# TRADINGVIEW.listen_port | int | no | 5001 | [1, 65535]
-# TRADINGVIEW.secret | str | no | ***REDACTED*** | required when enabled in strict mode
-# TRADINGVIEW.allowed_signals | str | no | (empty) | optional CSV allow-list (e.g. BUY,SELL)
-# TRADINGVIEW.mode | enum | no | ADVISORY | OFF|ADVISORY|PAPER|LIVE
-# TRADINGVIEW.candidate_cooldown_minutes | int | no | 5 | minutes; de-dup identical alerts (symbol/timeframe/signal)
 # ---------------------------------------------------------------------------
 
 
@@ -304,31 +297,10 @@ _KEYS_SCHEMA: list[FieldSpec] = [
     FieldSpec("KEYS", "alpaca_secret", "str", "", required=False),
     FieldSpec("KEYS", "telegram_token", "str", "", required=False),
     FieldSpec("KEYS", "telegram_chat_id", "str", "", required=False),
-    FieldSpec("KEYS", "tradingview_secret", "str", "", required=False),
 ]
 
 
 
-_TRADINGVIEW_SCHEMA_ALWAYS: list[FieldSpec] = [
-    FieldSpec("TRADINGVIEW", "enabled", "bool", False, required=False),
-    FieldSpec("TRADINGVIEW", "mode", "enum", "ADVISORY", required=False, allowed=("OFF", "ADVISORY", "PAPER", "LIVE")),
-    FieldSpec("TRADINGVIEW", "candidate_cooldown_minutes", "int", 5, required=False, min_value=0, max_value=1440),
-    FieldSpec("TRADINGVIEW", "autovalidation_enabled", "bool", True, required=False),
-    FieldSpec("TRADINGVIEW", "autovalidation_cooldown_minutes", "int", 10, required=False, min_value=0, max_value=1440),
-    FieldSpec("TRADINGVIEW", "autovalidation_freshness_minutes", "int", 30, required=False, min_value=1, max_value=1440),
-    FieldSpec("TRADINGVIEW", "autovalidation_backfill_days", "int", 60, required=False, min_value=1, max_value=365),
-    FieldSpec("TRADINGVIEW", "autovalidation_backtest_days", "int", 14, required=False, min_value=1, max_value=90),
-    FieldSpec("TRADINGVIEW", "autovalidation_max_strategies", "int", 6, required=False, min_value=1, max_value=20),
-    FieldSpec("TRADINGVIEW", "autovalidation_min_trades", "int", 1, required=False, min_value=0, max_value=50),
-    FieldSpec("TRADINGVIEW", "autovalidation_max_concurrency", "int", 1, required=False, min_value=1, max_value=4),
-]
-
-
-_TRADINGVIEW_SCHEMA_ENABLED: list[FieldSpec] = [
-    FieldSpec("TRADINGVIEW", "listen_host", "str", "127.0.0.1", required=False),
-    FieldSpec("TRADINGVIEW", "listen_port", "int", 5001, required=False, min_value=1, max_value=65535),
-    FieldSpec("TRADINGVIEW", "allowed_signals", "str", "", required=False),
-]
 
 def validate_runtime_config(
     config,
@@ -396,35 +368,6 @@ def validate_runtime_config(
                         rep.errors.append("CONFIGURATION.max_open_trades has invalid type; expected int")
                     else:
                         rep.warnings.append("CONFIGURATION.max_open_trades has invalid type; expected int")
-    except Exception:
-        pass
-
-    # Validate TRADINGVIEW fields (optional integration; only enforced when enabled).
-    try:
-        if config.has_section("TRADINGVIEW"):
-            tv_vals: dict[tuple[str, str], Any] = {}
-            for spec in _TRADINGVIEW_SCHEMA_ALWAYS:
-                tv_vals[(spec.section, spec.key)] = _validate_field(config, spec, rep, strict=strict)
-
-            enabled = bool(tv_vals.get(("TRADINGVIEW", "enabled"), False))
-            mode = str(tv_vals.get(("TRADINGVIEW", "mode"), "ADVISORY")).strip().upper() or "ADVISORY"
-
-            # If integration is enabled, validate the remaining keys (port/secret etc.)
-            if enabled and mode != "OFF":
-                for spec in _TRADINGVIEW_SCHEMA_ENABLED:
-                    tv_vals[(spec.section, spec.key)] = _validate_field(config, spec, rep, strict=strict)
-
-                # Secret is required in strict mode when enabled.
-                try:
-                    secret = (_get_raw(config, "TRADINGVIEW", "secret") or "").strip()
-                except Exception:
-                    secret = ""
-                if not secret:
-                    msg = "TRADINGVIEW.secret is empty while TRADINGVIEW.enabled=True; webhook auth is unsafe"
-                    if strict:
-                        rep.errors.append(msg)
-                    else:
-                        rep.warnings.append(msg)
     except Exception:
         pass
 

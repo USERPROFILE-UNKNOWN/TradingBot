@@ -6,10 +6,13 @@ REM TradingBot v6.15.0
 REM Forward-only cleanup: remove legacy/compat artifacts + Python bytecode caches
 REM ============================================================================
 REM Safe to run multiple times.
-REM Run from TradingBot\ (same folder as main.py).
+REM Run from TradingBot\bat\ (resolves repo root automatically).
 REM ============================================================================
 
-cd /d "%~dp0"
+set "BAT_DIR=%~dp0"
+if "%BAT_DIR:~-1%"=="\" set "BAT_DIR=%BAT_DIR:~0,-1%"
+for %%I in ("%BAT_DIR%\..") do set "ROOT_DIR=%%~fI"
+cd /d "%ROOT_DIR%"
 
 echo.
 echo [CLEANUP] Removing legacy artifacts...

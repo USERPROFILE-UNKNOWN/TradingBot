@@ -1,8 +1,9 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-set "ROOT_DIR=%~dp0"
-if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
+set "BAT_DIR=%~dp0"
+if "%BAT_DIR:~-1%"=="\" set "BAT_DIR=%BAT_DIR:~0,-1%"
+for %%I in ("%BAT_DIR%\..") do set "ROOT_DIR=%%~fI"
 
 echo ==========================================================
 echo      TRADINGBOT TEST RUNNER (v6.15.0)

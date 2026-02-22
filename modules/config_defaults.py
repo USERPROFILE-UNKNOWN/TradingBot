@@ -261,23 +261,6 @@ CONFIGURATION_DEFAULTS: Dict[str, str] = {
     "watchlist_auto_update_mode": "ADD",
 }
 
-TRADINGVIEW_DEFAULTS: Dict[str, str] = {
-    "allowed_signals": "",
-    "autovalidation_backfill_days": "60",
-    "autovalidation_backtest_days": "14",
-    "autovalidation_cooldown_minutes": "10",
-    "autovalidation_enabled": "True",
-    "autovalidation_freshness_minutes": "30",
-    "autovalidation_max_concurrency": "1",
-    "autovalidation_max_strategies": "6",
-    "autovalidation_min_trades": "1",
-    "candidate_cooldown_minutes": "5",
-    "enabled": "False",
-    "listen_host": "127.0.0.1",
-    "listen_port": "5001",
-    "secret": "",
-    "mode": "ADVISORY",
-}
 
 KEYS_DEFAULTS: Dict[str, str] = {
     "paper_base_url": "https://paper-api.alpaca.markets",
@@ -289,13 +272,14 @@ KEYS_DEFAULTS: Dict[str, str] = {
     "telegram_token": "",
     "telegram_chat_id": "",
     "telegram_enabled": "True",
-    "tradingview_secret": "",
 }
 
 WATCHLIST_INI_TEMPLATE = r"""
 [WATCHLIST_FAVORITES_STOCK]
 
 [WATCHLIST_FAVORITES_CRYPTO]
+
+[WATCHLIST_FAVORITES_ETF]
 
 [WATCHLIST_ACTIVE_STOCK]
 TQQQ = 
@@ -338,6 +322,13 @@ XRP/USD =
 XTZ/USD = 
 YFI/USD = 
 
+[WATCHLIST_ACTIVE_ETF]
+SOXL = 
+SOXS = 
+SPXU = 
+SQQQ = 
+TQQQ = 
+
 [WATCHLIST_ARCHIVE_STOCK]
 TQQQ = 
 SOXL = 
@@ -378,6 +369,139 @@ USDT/USD =
 XRP/USD = 
 XTZ/USD = 
 YFI/USD = 
+
+[WATCHLIST_ARCHIVE_ETF]
+SOXL = 
+SOXS = 
+SPXU = 
+SQQQ = 
+TQQQ = 
+"""
+
+SECTORS_INI_TEMPLATE = r"""
+[STOCK_SECTORS]
+Commercial services = 
+Communications = 
+Consumer durables = 
+Consumer non-durables = 
+Consumer services = 
+Distribution services = 
+Electronic technology = 
+Energy minerals = 
+Finance = 
+Government = 
+Health services = 
+Health technology = 
+Industrial services = 
+Miscellaneous = 
+Non-energy minerals = 
+Process industries = 
+Producer manufacturing = 
+Retail trade = 
+Technology services = 
+Transportation = 
+Utilities = 
+
+[CRYPTO_SECTORS]
+Algorithmic stablecoins = 
+Analytics = 
+Animal memes = 
+Asset management = 
+Asset-backed stablecoins = 
+Asset-backed tokens = 
+Centralized exchange = 
+Cryptocurrencies = 
+Cybersecurity = 
+DAO = 
+Data management and AI = 
+Decentralized exchange = 
+DeFi = 
+DePIN = 
+Derivatives = 
+Development tools = 
+Distributed computing and storage = 
+E-commerce = 
+Education = 
+Energy = 
+Enterprise solutions = 
+Events = 
+Exchange tokens = 
+Fan tokens = 
+Fiat-backed stablecoins = 
+Fundraising = 
+Gambling = 
+Gaming = 
+Health = 
+Hospitality = 
+Identity = 
+Insurance = 
+Internet of things = 
+Interoperability = 
+ISO 20022 = 
+Jobs = 
+Layer 1 = 
+Lending and borrowing = 
+Logistics = 
+Loyalty and rewards = 
+Made in America = 
+Made in China = 
+Manufacturing = 
+Marketing = 
+Marketplace = 
+Memes = 
+Metaverse = 
+Move to earn = 
+NFTs and collectables = 
+Oracles = 
+Payments = 
+Prediction markets = 
+Privacy = 
+Real estate = 
+Real-world assets = 
+Rehypothecated assets = 
+Scaling = 
+Seigniorage = 
+Smart contract platforms = 
+Social media and content = 
+Sports = 
+Stablecoins = 
+Tap to earn = 
+Tourism = 
+Transport = 
+Web3 = 
+World Liberty Financial portfolio = 
+Wrapped tokens = 
+
+[ETF_SECTORS]
+Agriculture = 
+Asset allocation = 
+Basket = 
+Broad market = 
+Broad market, asset-backed = 
+Broad market, broad-based = 
+Corporate, asset-backed = 
+Corporate, bank loans = 
+Corporate, broad-based = 
+Corporate, convertible = 
+Corporate, preferred = 
+Energy = 
+Government, agency = 
+Government, broad-based = 
+Government, inflation-linked = 
+Government, local authority/municipal = 
+Government, mortgage-backed = 
+Government, non-native currency = 
+Government, treasury = 
+Hedge fund strategies = 
+High dividend yield = 
+Industrial metals = 
+Metals = 
+Pair = 
+Precious metals = 
+Sector = 
+Size and style = 
+Structured outcome = 
+Tactical tools = 
 """
 
 STRATEGY_INI_TEMPLATE = r"""
@@ -520,7 +644,6 @@ def default_split_config() -> configparser.ConfigParser:
 
     # Core
     _ensure_section(cfg, "CONFIGURATION", CONFIGURATION_DEFAULTS)
-    _ensure_section(cfg, "TRADINGVIEW", TRADINGVIEW_DEFAULTS)
     _ensure_section(cfg, "KEYS", KEYS_DEFAULTS)
 
     # Watchlist / strategies templates (multi-section)
@@ -530,6 +653,10 @@ def default_split_config() -> configparser.ConfigParser:
         pass
     try:
         cfg.read_string(STRATEGY_INI_TEMPLATE)
+    except Exception:
+        pass
+    try:
+        cfg.read_string(SECTORS_INI_TEMPLATE)
     except Exception:
         pass
 

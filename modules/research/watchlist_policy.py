@@ -501,7 +501,9 @@ def apply_watchlist_policy(
         for s in new_list:
             try:
                 sec = "WATCHLIST_ACTIVE_CRYPTO" if _is_crypto_symbol(s) else "WATCHLIST_ACTIVE_STOCK"
-                config[sec][s] = ""
+                if sec == "WATCHLIST_ACTIVE_STOCK" and config.has_section("WATCHLIST_ACTIVE_ETF") and s in (config["WATCHLIST_ACTIVE_ETF"] if "WATCHLIST_ACTIVE_ETF" in config else {}):
+                    sec = "WATCHLIST_ACTIVE_ETF"
+                config[sec][s] = config.get(sec, s, fallback="") if hasattr(config, "get") else ""
             except Exception:
                 pass
 
@@ -509,6 +511,8 @@ def apply_watchlist_policy(
         for s in removed:
             try:
                 sec = "WATCHLIST_ARCHIVE_CRYPTO" if _is_crypto_symbol(s) else "WATCHLIST_ARCHIVE_STOCK"
+                if sec == "WATCHLIST_ARCHIVE_STOCK" and config.has_section("WATCHLIST_ACTIVE_ETF") and s in (config["WATCHLIST_ACTIVE_ETF"] if "WATCHLIST_ACTIVE_ETF" in config else {}):
+                    sec = "WATCHLIST_ARCHIVE_ETF"
                 if not config.has_section(sec):
                     config.add_section(sec)
                 config[sec][s] = ""
@@ -537,7 +541,7 @@ def apply_watchlist_policy(
     # Audit log file
     try:
         logs_root = paths.get("logs") or ""
-        out_dir = os.path.join(logs_root, "research") if logs_root else ""
+        out_dir = os.path.join(logs_root, "watchlist_policy") if logs_root else ""
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
             out_path = os.path.join(out_dir, f"watchlist_policy_{batch_id}.json")

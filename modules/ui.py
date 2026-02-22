@@ -175,14 +175,6 @@ class TradingApp(ctk.CTk):
         self.action_bar = ctk.CTkFrame(self, height=45)
         self.action_bar.pack(fill="x", padx=5, pady=(0,5))
         
-        self.btn_export = ctk.CTkButton(self.action_bar, text="EXPORT LOG", width=120, command=self.export_log_file, fg_color="#607D8B")
-        self.btn_export.pack(side="right", padx=5)
-
-        self.btn_summary = ctk.CTkButton(self.action_bar, text="EXPORT SUMMARY", width=140, command=self.export_run_summary, fg_color="#455A64")
-        self.btn_summary.pack(side="right", padx=5)
-
-        self.btn_strategy_report = ctk.CTkButton(self.action_bar, text="STRATEGY REPORT", width=150, command=self.export_strategy_report, fg_color="#37474F")
-        self.btn_strategy_report.pack(side="right", padx=5)
 
         self.btn_retrain_ai = ctk.CTkButton(self.action_bar, text="RETRAIN AI", width=110, command=self.retrain_ai_model, fg_color="#546E7A")
         self.btn_retrain_ai.pack(side="right", padx=5)
@@ -198,16 +190,10 @@ class TradingApp(ctk.CTk):
         self.tab_view = ctk.CTkTabview(self, width=1050, height=700)
         self.tab_view.pack(pady=10, padx=10, fill="both", expand=True)
         self.tab_log = self.tab_view.add("Live Log")
-        self.tab_chart = self.tab_view.add("Dashboard")
-        self.tab_candidates = self.tab_view.add("Today's Candidates")
-        self.tab_inspect = self.tab_view.add("Inspector")
-        self.tab_config = self.tab_view.add("Config")
-        self.tab_architect = self.tab_view.add("The Architect") 
-        self.tab_backtest = self.tab_view.add("Backtest Lab") 
         self.tab_pos = self.tab_view.add("Active Positions")
-        self.tab_hist = self.tab_view.add("Portfolio Manager")
-        self.tab_strat = self.tab_view.add("Strategies") 
-        self.tab_set = self.tab_view.add("Settings") 
+        self.tab_utils = self.tab_view.add("Utilities")
+        self.tab_config = self.tab_view.add("Config")
+        self.tab_set = self.tab_view.add("Settings")
 
         # 3. Log Box
         self.log_box = ctk.CTkTextbox(self.tab_log, width=1000, height=500)
@@ -237,19 +223,28 @@ class TradingApp(ctk.CTk):
         except Exception:
             pass
 
-        # 5. Logic
-        self.dashboard_logic = DashboardTab(self.tab_chart, self.engine, self.db_manager, self.config, metrics_store=getattr(self.agent_master, "metrics", None))
-        self.inspector_logic = InspectorTab(self.tab_inspect, self.engine, self.db_manager, self.config)
-        self.config_logic = ConfigTab(self.tab_config, self.db_manager, self.config, self.paths, self.log)
-        self.architect_logic = ArchitectTab(self.tab_architect, self.db_manager, self.config)
-        self.candidates_logic = CandidatesTab(self.tab_candidates, self.engine, self.db_manager, self.config)
+        # 5. Platform selectors for kept tabs
+        self._add_platform_selector(self.tab_log)
+        self._add_platform_selector(self.tab_pos)
+        self._add_platform_selector(self.tab_utils)
+        self._add_platform_selector(self.tab_config)
+        self._add_platform_selector(self.tab_set)
 
-        # 6. Remaining
-        self.setup_backtest_tab()
-        self.setup_positions_tab()
-        self.setup_portfolio_tab()
-        self.setup_strategies_tab()
-        self.setup_settings_tab()
+        # 6. Core tab logic
+        self.config_logic = ConfigTab(self.tab_config, self.db_manager, self.config, self.paths, self.log)
+        self.setup_utilities_tab()
+        self.setup_positions_tab(parent=self.tab_pos)
+        self.setup_settings_tab(parent=self.tab_set)
+
+        # Popup state holders
+        self._dashboard_popup = None
+        self._inspector_popup = None
+        self._architect_popup = None
+        self._candidates_popup = None
+        self._backtest_popup = None
+        self._portfolio_popup = None
+        self._strategies_popup = None
+        self._stock_screener_popup = None
 
         # Phase 0 guardrail: if config.ini is in a merged/broken state, repair it before any config writes.
         try:
@@ -718,6 +713,397 @@ class TradingApp(ctk.CTk):
         except Exception:
             pass
 
+
+    def _platform_values(self):
+        vals = self.paths.get("available_platforms") or [self.paths.get("platform", "alpaca")]
+        return [str(v).capitalize() for v in vals]
+
+    def _add_platform_selector(self, parent):
+        holder = ctk.CTkFrame(parent, fg_color="transparent")
+        holder.pack(fill="x", padx=10, pady=(8, 0))
+        ctk.CTkLabel(holder, text="Platform:", width=80).pack(side="left")
+        opt = ctk.CTkOptionMenu(holder, values=self._platform_values(), command=lambda _v: None)
+        opt.pack(side="left")
+        try:
+            opt.set((self.paths.get("platform") or "alpaca").capitalize())
+        except Exception:
+            pass
+        return opt
+
+    def _make_popup(self, title: str, size: str = "1180x780"):
+        w = ctk.CTkToplevel(self)
+        w.title(title)
+        w.geometry(size)
+        self._add_platform_selector(w)
+        body = ctk.CTkFrame(w)
+        body.pack(fill="both", expand=True, padx=8, pady=8)
+        return w, body
+
+    def setup_utilities_tab(self):
+        wrap = ctk.CTkFrame(self.tab_utils)
+        wrap.pack(fill="both", expand=True, padx=10, pady=10)
+        ctk.CTkLabel(wrap, text="Utilities", font=("Arial", 16, "bold")).pack(anchor="w", padx=10, pady=10)
+        btns = [
+            ("BACKTEST LAB", self.open_backtest_popup),
+            ("DASHBOARD", self.open_dashboard_popup),
+            ("INSPECTOR", self.open_inspector_popup),
+            ("PORTFOLIO MANAGER", self.open_portfolio_popup),
+            ("STRATEGIES", self.open_strategies_popup),
+            ("THE ARCHITECT", self.open_architect_popup),
+            ("TODAY'S CANDIDATES", self.open_candidates_popup),
+            ("STOCK SCREENER", self.open_stock_screener_popup),
+        ]
+        row = ctk.CTkFrame(wrap, fg_color="transparent")
+        row.pack(fill="x", padx=10)
+        for i, (txt, cb) in enumerate(btns):
+            ctk.CTkButton(row, text=txt, command=cb).grid(row=i//2, column=i%2, padx=8, pady=8, sticky="ew")
+        row.grid_columnconfigure(0, weight=1)
+        row.grid_columnconfigure(1, weight=1)
+
+    def open_dashboard_popup(self):
+        if self._dashboard_popup and self._dashboard_popup.winfo_exists():
+            self._dashboard_popup.lift(); return
+        self._dashboard_popup, body = self._make_popup("Dashboard")
+        self.dashboard_logic = DashboardTab(body, self.engine, self.db_manager, self.config, metrics_store=getattr(self.agent_master, "metrics", None))
+
+    def open_inspector_popup(self):
+        if self._inspector_popup and self._inspector_popup.winfo_exists():
+            self._inspector_popup.lift(); return
+        self._inspector_popup, body = self._make_popup("Inspector")
+        self.inspector_logic = InspectorTab(body, self.engine, self.db_manager, self.config)
+
+    def open_architect_popup(self):
+        if self._architect_popup and self._architect_popup.winfo_exists():
+            self._architect_popup.lift(); return
+        self._architect_popup, body = self._make_popup("The Architect")
+        self.architect_logic = ArchitectTab(body, self.db_manager, self.config)
+
+    def open_candidates_popup(self):
+        if self._candidates_popup and self._candidates_popup.winfo_exists():
+            self._candidates_popup.lift(); return
+        self._candidates_popup, body = self._make_popup("Today's Candidates")
+        self.candidates_logic = CandidatesTab(body, self.engine, self.db_manager, self.config)
+
+    def open_backtest_popup(self):
+        if self._backtest_popup and self._backtest_popup.winfo_exists():
+            self._backtest_popup.lift(); return
+        self._backtest_popup, body = self._make_popup("Backtest Lab")
+        self.setup_backtest_tab(parent=body)
+
+    def open_portfolio_popup(self):
+        if self._portfolio_popup and self._portfolio_popup.winfo_exists():
+            self._portfolio_popup.lift(); return
+        self._portfolio_popup, body = self._make_popup("Portfolio Manager")
+        self.setup_portfolio_tab(parent=body)
+
+    def open_strategies_popup(self):
+        if self._strategies_popup and self._strategies_popup.winfo_exists():
+            self._strategies_popup.lift(); return
+        self._strategies_popup, body = self._make_popup("Strategies")
+        self.setup_strategies_tab(parent=body)
+
+
+    def open_stock_screener_popup(self):
+        if self._stock_screener_popup and self._stock_screener_popup.winfo_exists():
+            self._stock_screener_popup.lift(); return
+        self._stock_screener_popup, body = self._make_popup("Stock Screener", size="1320x860")
+
+        controls = ctk.CTkFrame(body)
+        controls.pack(fill="x", padx=8, pady=8)
+
+        ctk.CTkLabel(controls, text="Market:", width=70).pack(side="left")
+        self._screener_market = ctk.StringVar(value="ALL")
+        market_opt = ctk.CTkOptionMenu(
+            controls,
+            values=["ALL", "STOCK", "CRYPTO", "ETF"],
+            variable=self._screener_market,
+            command=lambda _v: self._refresh_stock_screener(),
+        )
+        market_opt.pack(side="left")
+
+        ctk.CTkLabel(controls, text="Cluster:", width=70).pack(side="left", padx=(10, 0))
+        self._screener_cluster = ctk.StringVar(value="ALL")
+        self._screener_cluster_opt = ctk.CTkOptionMenu(
+            controls,
+            values=["ALL"],
+            variable=self._screener_cluster,
+            command=lambda _v: self._refresh_stock_screener(),
+        )
+        self._screener_cluster_opt.pack(side="left")
+
+        ctk.CTkButton(controls, text="REFRESH", command=self._refresh_stock_screener).pack(side="left", padx=10)
+
+        self._screener_status = ctk.CTkLabel(controls, text="", text_color="gray")
+        self._screener_status.pack(side="right", padx=8)
+
+        ctk.CTkLabel(body, text="Overview & Performance", font=("Arial", 16, "bold")).pack(anchor="w", padx=10, pady=(2, 6))
+
+        cols = (
+            "Symbol",
+            "Market",
+            "Price",
+            "Change % 1D",
+            "Perf % 1W",
+            "Volume 1D",
+            "Rel Volume 1D",
+            "Volatility 1D",
+            "Market Cap",
+            "AUM",
+            "Circ Supply",
+            "Sector",
+            "Rating",
+        )
+        table_wrap = ctk.CTkFrame(body)
+        table_wrap.pack(fill="both", expand=True, padx=8, pady=8)
+        self._screener_tree = ttk.Treeview(table_wrap, columns=cols, show="headings")
+        for c in cols:
+            self._screener_tree.heading(c, text=c, command=lambda col=c: self._sort_screener_by(col))
+            self._screener_tree.column(c, width=130, anchor="center")
+        self._screener_tree.column("Symbol", width=110, anchor="w")
+        self._screener_tree.column("Market", width=80)
+        self._screener_tree.column("Sector", width=220, anchor="w")
+        self._screener_tree.column("Rating", width=100)
+
+        ysb = ttk.Scrollbar(table_wrap, orient="vertical", command=self._screener_tree.yview)
+        xsb = ttk.Scrollbar(table_wrap, orient="horizontal", command=self._screener_tree.xview)
+        self._screener_tree.configure(yscrollcommand=ysb.set, xscrollcommand=xsb.set)
+        self._screener_tree.pack(side="left", fill="both", expand=True)
+        ysb.pack(side="right", fill="y")
+        xsb.pack(side="bottom", fill="x")
+
+        self._screener_rows = []
+        self._screener_sort_desc = False
+        self._screener_sort_col = "Symbol"
+        self._screener_loading = False
+        self._refresh_stock_screener()
+
+    def _rating_from_change(self, pct):
+        try:
+            p = float(pct)
+        except Exception:
+            return "No rating"
+        if p >= 5:
+            return "Strong buy"
+        if p >= 1:
+            return "Buy"
+        if p <= -5:
+            return "Strong sell"
+        if p <= -1:
+            return "Sell"
+        return "Neutral"
+
+    def _cluster_label(self, row):
+        try:
+            m = str(row.get("Market", "")).upper()
+            price = float(str(row.get("Price", "N/A")).replace(",", ""))
+        except Exception:
+            return "Price: Unknown"
+        if m == "CRYPTO":
+            if price > 1000:
+                return "Price: Above 1000 USD"
+            if price >= 100:
+                return "Price: 100 to 1000 USD"
+            if price >= 10:
+                return "Price: 10 to 100 USD"
+            return "Price: Below 10 USD"
+        if m == "ETF":
+            if price > 1000:
+                return "Price: Above 1000"
+            if price >= 100:
+                return "Price: 100 to 1000"
+            if price >= 10:
+                return "Price: 10 to 100"
+            return "Price: Below 10"
+        # STOCK/default
+        if price > 100:
+            return "Price: Above 100"
+        if price > 10:
+            return "Price: 10 to 100"
+        if price <= 5:
+            return "Price: 5 and below"
+        return "Price: 10 and below"
+
+    def _refresh_stock_screener(self):
+        if not getattr(self, "_screener_tree", None):
+            return
+        if getattr(self, "_screener_loading", False):
+            return
+        self._screener_loading = True
+        try:
+            self._screener_status.configure(text="Loading...")
+        except Exception:
+            pass
+
+        def _worker():
+            try:
+                from .watchlist_api import get_watchlist_entries
+                rows = get_watchlist_entries(self.config, group="ALL", asset="ALL")
+            except Exception:
+                rows = []
+
+            mkt_filter = str(getattr(self, "_screener_market", None).get() if getattr(self, "_screener_market", None) else "ALL").upper()
+            if mkt_filter != "ALL":
+                rows = [r for r in rows if str(r.get("market", "")).upper() == mkt_filter]
+
+            enriched = []
+            for r in rows:
+                sym = str(r.get("symbol", "")).upper()
+                mkt = str(r.get("market", "")).upper()
+                sector = str(r.get("sector", ""))
+
+                price = None
+                chg_1d_num = None
+                perf_1w_num = None
+                vol_1d_num = None
+                rel_vol_1d_num = None
+                volat_1d_num = None
+                cap = "N/A"
+                aum = "N/A"
+                circ = "N/A"
+
+                try:
+                    snap = self.db_manager.get_latest_snapshot(sym)
+                    if snap is not None:
+                        price = float(snap)
+                except Exception:
+                    price = None
+
+                try:
+                    hist = self.db_manager.get_history(sym, limit=40)
+                    if hist is not None and len(hist) >= 2:
+                        prev = float(hist["close"].iloc[-2])
+                        last = float(hist["close"].iloc[-1])
+                        if prev > 0:
+                            chg_1d_num = ((last - prev) / prev) * 100.0
+                    if hist is not None and len(hist) >= 6:
+                        p1w = float(hist["close"].iloc[-6])
+                        pnow = float(hist["close"].iloc[-1])
+                        if p1w > 0:
+                            perf_1w_num = ((pnow - p1w) / p1w) * 100.0
+                    if hist is not None and "volume" in hist.columns and len(hist) >= 20:
+                        v_last = float(hist["volume"].iloc[-1])
+                        v_mean = float(hist["volume"].iloc[-20:].mean())
+                        vol_1d_num = v_last
+                        if v_mean > 0:
+                            rel_vol_1d_num = v_last / v_mean
+                    if hist is not None and len(hist) >= 20:
+                        ret = hist["close"].pct_change().dropna()
+                        if len(ret) > 3:
+                            volat_1d_num = float(ret.tail(20).std() * 100.0)
+                except Exception:
+                    pass
+
+                chg_txt = f"{chg_1d_num:.2f}%" if chg_1d_num is not None else "N/A"
+                perf_txt = f"{perf_1w_num:.2f}%" if perf_1w_num is not None else "N/A"
+                vol_txt = f"{vol_1d_num:,.0f}" if vol_1d_num is not None else "N/A"
+                rel_vol_txt = f"{rel_vol_1d_num:.2f}" if rel_vol_1d_num is not None else "N/A"
+                volat_txt = f"{volat_1d_num:.2f}%" if volat_1d_num is not None else "N/A"
+                price_txt = f"{price:.4f}" if price is not None else "N/A"
+                rating = self._rating_from_change(chg_1d_num)
+
+                enriched.append({
+                    "Symbol": sym,
+                    "Market": mkt,
+                    "Price": price_txt,
+                    "Change % 1D": chg_txt,
+                    "Perf % 1W": perf_txt,
+                    "Volume 1D": vol_txt,
+                    "Rel Volume 1D": rel_vol_txt,
+                    "Volatility 1D": volat_txt,
+                    "Market Cap": cap,
+                    "AUM": aum,
+                    "Circ Supply": circ,
+                    "Sector": sector,
+                    "Rating": rating,
+                })
+
+            cluster_values = ["ALL"]
+            seen = set()
+            for row in enriched:
+                cl = self._cluster_label(row)
+                if cl not in seen:
+                    seen.add(cl)
+                    cluster_values.append(cl)
+
+            try:
+                selected_cluster = str(getattr(self, "_screener_cluster", None).get() if getattr(self, "_screener_cluster", None) else "ALL")
+            except Exception:
+                selected_cluster = "ALL"
+
+            if selected_cluster != "ALL":
+                enriched = [r for r in enriched if self._cluster_label(r) == selected_cluster]
+
+            def _apply():
+                self._screener_rows = enriched
+                self._render_screener_rows(enriched)
+                try:
+                    self._screener_cluster_opt.configure(values=cluster_values)
+                    if selected_cluster in cluster_values:
+                        self._screener_cluster.set(selected_cluster)
+                    else:
+                        self._screener_cluster.set("ALL")
+                except Exception:
+                    pass
+                try:
+                    self._screener_status.configure(text=f"Rows: {len(enriched)}")
+                except Exception:
+                    pass
+                self._screener_loading = False
+
+            self.call_ui(_apply)
+        
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _render_screener_rows(self, rows):
+        tr = self._screener_tree
+        for iid in tr.get_children():
+            tr.delete(iid)
+        for r in rows:
+            tr.insert(
+                "",
+                "end",
+                values=(
+                    r["Symbol"],
+                    r["Market"],
+                    r["Price"],
+                    r["Change % 1D"],
+                    r["Perf % 1W"],
+                    r["Volume 1D"],
+                    r["Rel Volume 1D"],
+                    r["Volatility 1D"],
+                    r["Market Cap"],
+                    r["AUM"],
+                    r["Circ Supply"],
+                    r["Sector"],
+                    r["Rating"],
+                ),
+            )
+
+    def _sort_screener_by(self, col):
+        rows = list(getattr(self, "_screener_rows", []))
+        if not rows:
+            return
+        if getattr(self, "_screener_sort_col", "") == col:
+            self._screener_sort_desc = not bool(getattr(self, "_screener_sort_desc", False))
+        else:
+            self._screener_sort_col = col
+            self._screener_sort_desc = False
+
+        def numify(v):
+            s = str(v).replace("%", "").replace(",", "").strip()
+            try:
+                return float(s)
+            except Exception:
+                return None
+
+        def keyf(r):
+            n = numify(r.get(col, ""))
+            return (n is None, str(r.get(col, "")) if n is None else n)
+
+        rows.sort(key=keyf, reverse=bool(self._screener_sort_desc))
+        self._screener_rows = rows
+        self._render_screener_rows(rows)
+
     def trigger_chart_update(self, symbol):
         # v5.13.2 updateA: miniplayer pauses chart redraw triggers.
         if bool(getattr(self, "_miniplayer_enabled", False)):
@@ -736,8 +1122,9 @@ class TradingApp(ctk.CTk):
             except Exception:
                 pass
 
-    def setup_positions_tab(self):
-        self.pos_frame = ctk.CTkScrollableFrame(self.tab_pos, width=1000, height=600)
+    def setup_positions_tab(self, parent=None):
+        container = parent or self.tab_pos
+        self.pos_frame = ctk.CTkScrollableFrame(container, width=1000, height=600)
         self.pos_frame.pack(fill="both", expand=True, padx=10, pady=10)
         h = ctk.CTkFrame(self.pos_frame); h.pack(fill="x")
         cols = ["Symbol", "Qty", "Entry Price", "Current Price", "P/L ($)", "Action"]
@@ -770,16 +1157,17 @@ class TradingApp(ctk.CTk):
             ctk.CTkLabel(row, text=f"${pl:.2f}", width=150, text_color=pl_color).pack(side="left")
             ctk.CTkButton(row, text="CLOSE", width=100, fg_color="#D32F2F", command=lambda s=symbol: self.force_close(s)).pack(side="left", padx=10)
 
-    def setup_portfolio_tab(self):
-        self.stats_frame = ctk.CTkFrame(self.tab_hist)
+    def setup_portfolio_tab(self, parent=None):
+        container = parent or self.tab_hist
+        self.stats_frame = ctk.CTkFrame(container)
         self.stats_frame.pack(fill="x", padx=10, pady=10)
         self.lbl_total_pl = ctk.CTkLabel(self.stats_frame, text="Total P/L: $0.00", font=("Arial", 18, "bold"), text_color="white")
         self.lbl_total_pl.pack(side="left", padx=20, pady=20)
         self.lbl_win_rate = ctk.CTkLabel(self.stats_frame, text="Win Rate: 0%", font=("Arial", 18, "bold"), text_color="white")
         self.lbl_win_rate.pack(side="left", padx=20)
-        self.hist_list = ctk.CTkTextbox(self.tab_hist, width=1000, height=500)
+        self.hist_list = ctk.CTkTextbox(container, width=1000, height=500)
         self.hist_list.pack(fill="both", expand=True, padx=10, pady=10)
-        self.refresh_hist_btn = ctk.CTkButton(self.tab_hist, text="Refresh Stats", command=self.update_portfolio_tab)
+        self.refresh_hist_btn = ctk.CTkButton(container, text="Refresh Stats", command=self.update_portfolio_tab)
         self.refresh_hist_btn.pack(pady=10)
 
     def update_portfolio_tab(self):
@@ -808,14 +1196,15 @@ class TradingApp(ctk.CTk):
             line = f"{str(ts):<20} | {str(row[0]):<10} | ${pl_val:<9.2f} | {str(strat)}\n"
             self.hist_list.insert("end", line)
 
-    def setup_backtest_tab(self):
-        bt_ctrl = ctk.CTkFrame(self.tab_backtest)
+    def setup_backtest_tab(self, parent=None):
+        container = parent or self.tab_backtest
+        bt_ctrl = ctk.CTkFrame(container)
         bt_ctrl.pack(fill="x", padx=10, pady=10)
         ctk.CTkButton(bt_ctrl, text="RUN FULL BACKTEST", width=200, height=40, fg_color="#7B1FA2", command=self.run_full_backtest_thread).pack(side="right", padx=10)
         ctk.CTkButton(bt_ctrl, text="ARCH ORCHESTRATOR", width=200, height=40, fg_color="#455A64", command=self.open_backtest_orchestrator).pack(side="right", padx=10)
         ctk.CTkButton(bt_ctrl, text="EXPORT BACKTEST RESULTS", width=220, height=40, fg_color="#1976D2", command=self.export_backtest_results_thread).pack(side="right", padx=10)
         ctk.CTkLabel(bt_ctrl, text="Backtest Lab (Sorting Enabled)", font=("Arial", 16, "bold")).pack(side="left", padx=10)
-        self.bt_container = ctk.CTkFrame(self.tab_backtest)
+        self.bt_container = ctk.CTkFrame(container)
         self.bt_container.pack(fill="both", expand=True, padx=10, pady=5)
         self.tree_left = ttk.Treeview(self.bt_container, show="headings", selectmode="browse")
         self.tree_left["columns"] = ("symbol")
@@ -826,7 +1215,7 @@ class TradingApp(ctk.CTk):
         self.tree_right.pack(side="left", fill="both", expand=True)
         self.vsb = ttk.Scrollbar(self.bt_container, orient="vertical", command=self.sync_scroll_y)
         self.vsb.pack(side="right", fill="y")
-        self.hsb = ttk.Scrollbar(self.tab_backtest, orient="horizontal", command=self.tree_right.xview)
+        self.hsb = ttk.Scrollbar(container, orient="horizontal", command=self.tree_right.xview)
         self.hsb.pack(fill="x", padx=10, pady=5)
         self.tree_left.configure(yscrollcommand=None)
         self.tree_right.configure(yscrollcommand=self.vsb.set, xscrollcommand=self.hsb.set)
@@ -843,14 +1232,16 @@ class TradingApp(ctk.CTk):
         
         self.refresh_backtest_ui() 
 
-    def setup_strategies_tab(self):
-        self.strat_scroll = ctk.CTkScrollableFrame(self.tab_strat, width=1000, height=600)
+    def setup_strategies_tab(self, parent=None):
+        container = parent or self.tab_strat
+        self.strat_scroll = ctk.CTkScrollableFrame(container, width=1000, height=600)
         self.strat_scroll.pack(fill="both", expand=True, padx=10, pady=10)
-        ctk.CTkButton(self.tab_strat, text="(+) Create Strategy", command=self.create_new_strategy, fg_color="#00C853").pack(pady=10)
+        ctk.CTkButton(container, text="(+) Create Strategy", command=self.create_new_strategy, fg_color="#00C853").pack(pady=10)
         self.load_strategies_tab()
 
-    def setup_settings_tab(self):
-        w_frame = ctk.CTkFrame(self.tab_set); w_frame.pack(fill="x", padx=10, pady=10)
+    def setup_settings_tab(self, parent=None):
+        container = parent or self.tab_set
+        w_frame = ctk.CTkFrame(container); w_frame.pack(fill="x", padx=10, pady=10)
         ctk.CTkLabel(w_frame, text="Wallet & Risk", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=5)
         row1 = ctk.CTkFrame(w_frame, fg_color="transparent"); row1.pack(fill="x", padx=10)
         ctk.CTkLabel(row1, text="Total Capital ($):", width=150).pack(side="left")
@@ -872,7 +1263,7 @@ class TradingApp(ctk.CTk):
         ctk.CTkLabel(row1d, text="Kill Switch ($):", width=150).pack(side="left")
         self.ent_kill = ctk.CTkEntry(row1d); self.ent_kill.pack(side="left"); self.ent_kill.insert(0, self.config['CONFIGURATION'].get('max_daily_loss', '100'))
 
-        agent_frame = ctk.CTkFrame(self.tab_set); agent_frame.pack(fill="x", padx=10, pady=10)
+        agent_frame = ctk.CTkFrame(container); agent_frame.pack(fill="x", padx=10, pady=10)
         ctk.CTkLabel(agent_frame, text="AI Agent Control", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=5)
         row_agent = ctk.CTkFrame(agent_frame, fg_color="transparent"); row_agent.pack(fill="x", padx=10)
         ctk.CTkLabel(row_agent, text="Agent Mode:", width=150).pack(side="left")
@@ -880,7 +1271,7 @@ class TradingApp(ctk.CTk):
         self.opt_agent_mode.pack(side="left")
         self.opt_agent_mode.set(self.config['CONFIGURATION'].get('agent_mode', 'OFF').upper())
 
-        e_frame = ctk.CTkFrame(self.tab_set); e_frame.pack(fill="x", padx=10, pady=10)
+        e_frame = ctk.CTkFrame(container); e_frame.pack(fill="x", padx=10, pady=10)
         ctk.CTkLabel(e_frame, text="Engine Speed", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=5)
         row2 = ctk.CTkFrame(e_frame, fg_color="transparent"); row2.pack(fill="x", padx=10)
         ctk.CTkLabel(row2, text="Scan Interval:", width=150).pack(side="left")
@@ -891,7 +1282,7 @@ class TradingApp(ctk.CTk):
         elif curr_speed == '300': self.opt_speed.set("Slow (5m)")
         else: self.opt_speed.set("Normal (60s)")
 
-        c_frame = ctk.CTkFrame(self.tab_set); c_frame.pack(fill="x", padx=10, pady=10)
+        c_frame = ctk.CTkFrame(container); c_frame.pack(fill="x", padx=10, pady=10)
         ctk.CTkLabel(c_frame, text="Credentials", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=5)
         row3 = ctk.CTkFrame(c_frame, fg_color="transparent"); row3.pack(fill="x", padx=10)
         ctk.CTkLabel(row3, text="Alpaca Key:", width=100).pack(side="left")
@@ -906,14 +1297,21 @@ class TradingApp(ctk.CTk):
         if self.config['KEYS'].get('telegram_enabled', 'True') == 'True': self.sw_tel.select()
 
 
-        d_frame = ctk.CTkFrame(self.tab_set); d_frame.pack(fill="x", padx=10, pady=10)
+        d_frame = ctk.CTkFrame(container); d_frame.pack(fill="x", padx=10, pady=10)
         ctk.CTkLabel(d_frame, text="DB Tools", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=5)
         rowd = ctk.CTkFrame(d_frame, fg_color="transparent"); rowd.pack(fill="x", padx=10, pady=5)
         ctk.CTkButton(rowd, text="DB HEALTH", command=self.db_health).pack(side="left", padx=5)
         ctk.CTkButton(rowd, text="REPAIR BACKTEST DB", command=self.db_repair_backtest).pack(side="left", padx=5)
         ctk.CTkButton(rowd, text="OPEN DB FOLDER", command=self.open_db_folder).pack(side="left", padx=5)
 
-        a_frame = ctk.CTkFrame(self.tab_set); a_frame.pack(fill="x", padx=10, pady=10)
+        ex_frame = ctk.CTkFrame(container); ex_frame.pack(fill="x", padx=10, pady=10)
+        ctk.CTkLabel(ex_frame, text="Export", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=5)
+        rowx = ctk.CTkFrame(ex_frame, fg_color="transparent"); rowx.pack(fill="x", padx=10, pady=5)
+        ctk.CTkButton(rowx, text="STRATEGY REPORT", command=self.export_strategy_report).pack(side="left", padx=5)
+        ctk.CTkButton(rowx, text="SUMMARY", command=self.export_run_summary).pack(side="left", padx=5)
+        ctk.CTkButton(rowx, text="LOG", command=self.export_log_file).pack(side="left", padx=5)
+
+        a_frame = ctk.CTkFrame(container); a_frame.pack(fill="x", padx=10, pady=10)
         ctk.CTkButton(a_frame, text="SAVE SETTINGS", fg_color="#00C853", command=self.save_global_settings).pack(side="right", padx=10, pady=10)
         ctk.CTkButton(a_frame, text="Open Logs Folder", command=self.open_logs).pack(side="left", padx=10, pady=10)
         ctk.CTkButton(a_frame, text="Factory Reset", fg_color="#D32F2F", command=self.factory_reset).pack(side="left", padx=10, pady=10)
@@ -1161,7 +1559,9 @@ class TradingApp(ctk.CTk):
         try:
             timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
             filename = f"[LIVE LOG] [{timestamp}].txt"
-            filepath = os.path.join(self.paths['logs'], filename)
+            out_dir = os.path.join(self.paths['logs'], 'live_log')
+            os.makedirs(out_dir, exist_ok=True)
+            filepath = os.path.join(out_dir, filename)
 
             # Release E2: Prefer exporting the file-backed runtime log if enabled
             rt = getattr(self, "_runtime_log_path", None)
@@ -1619,7 +2019,9 @@ class TradingApp(ctk.CTk):
                 filename = f"[{APP_VERSION}] [{prefix}] [{day}].log"
             else:
                 filename = f"[{APP_VERSION}] [{prefix}].log"
-            self._runtime_log_path = os.path.join(self.paths['logs'], filename)
+            runtime_dir = os.path.join(self.paths['logs'], 'runtime')
+            os.makedirs(runtime_dir, exist_ok=True)
+            self._runtime_log_path = os.path.join(runtime_dir, filename)
         except Exception:
             self._runtime_log_path = None
             return

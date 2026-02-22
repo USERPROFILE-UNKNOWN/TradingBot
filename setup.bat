@@ -23,8 +23,8 @@ set /p TARGET_VERSION="Enter Version (e.g. v5.16.2): "
 if "%TARGET_VERSION%"=="" set TARGET_VERSION=v5.16.2
 
 :: Define Log File
-if not exist "%ROOT_DIR%\logs" mkdir "%ROOT_DIR%\logs"
-set "LOG_FILE=%ROOT_DIR%\logs\[%TARGET_VERSION%] [SETUP LOG] [%YYYY%.%MM%.%DD%_%HH%.%Min%.%SS%].txt"
+if not exist "%ROOT_DIR%\logs\_setup" mkdir "%ROOT_DIR%\logs\_setup"
+set "LOG_FILE=%ROOT_DIR%\logs\_setup\[%TARGET_VERSION%] [SETUP LOG] [%YYYY%.%MM%.%DD%_%HH%.%Min%.%SS%].txt"
 
 echo.
 echo [INFO] Logging started...
@@ -86,7 +86,7 @@ exit /b
 
     echo.
     echo [STEP 2b] Running Smoke Tests...
-    call "%ROOT_DIR%\run_tests.bat"
+    call "%ROOT_DIR%\bat\run_tests.bat"
     if errorlevel 1 (
         echo.
         echo [FATAL ERROR] Test suite failed. Aborting build.
@@ -178,7 +178,7 @@ exit /b
         --exclude-module "caffe2" ^
         --exclude-module "sklearn.externals.array_api_compat.torch" ^
         --exclude-module "scipy._lib.array_api_compat.torch" ^
-        "%ROOT_DIR%\main.py"
+        "%ROOT_DIR%\modules\main.py"
 
     if errorlevel 1 (
         echo.

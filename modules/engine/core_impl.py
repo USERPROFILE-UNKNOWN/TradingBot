@@ -1225,8 +1225,8 @@ class TradingEngine:
         Export a strategy selection report based on the latest backtest_results table.
 
         Output:
-          logs/research/strategy_report_YYYY.MM.DD_HH.MM.SS_{paper|live}.json
-          logs/research/strategy_report_YYYY.MM.DD_HH.MM.SS_{paper|live}.csv
+          logs/<platform>/strategy_report/strategy_report_YYYY.MM.DD_HH.MM.SS_{paper|live}.json
+          logs/<platform>/strategy_report/strategy_report_YYYY.MM.DD_HH.MM.SS_{paper|live}.csv
 
         Notes:
           - This does NOT change trading logic.
@@ -1235,7 +1235,7 @@ class TradingEngine:
         try:
             paths = get_paths()
             logs_dir = paths.get('logs') or os.path.join(paths.get('root', '.'), 'logs')
-            out_dir = os.path.join(logs_dir, 'research')
+            out_dir = os.path.join(logs_dir, 'strategy_report')
             os.makedirs(out_dir, exist_ok=True)
 
             base_url = ''

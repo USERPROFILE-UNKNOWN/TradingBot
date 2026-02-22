@@ -8,6 +8,7 @@ sys.modules.setdefault("pandas", types.ModuleType("pandas"))
 
 from modules.startup_paths import resolve_db_placeholder_path
 from modules.database import DataManager
+from modules.paths import get_paths
 from modules.config_io import _repair_legacy_db_folder_layout
 
 
@@ -53,3 +54,48 @@ def test_repair_legacy_db_folder_layout_moves_config_db_files(tmp_path):
 
     assert (canonical_db / "trade_history.db").exists()
     assert not (config_db / "trade_history.db").exists()
+
+
+def test_get_paths_platform_layout_defaults_to_alpaca(monkeypatch, tmp_path):
+    root = tmp_path / "TradingBot"
+    cfg = root / "config"
+    (cfg / "alpaca").mkdir(parents=True)
+    (cfg / "config.ini").write_text("[CONFIGURATION]\n", encoding="utf-8")
+    (cfg / "alpaca" / "keys.ini").write_text("[KEYS]\n", encoding="utf-8")
+    (cfg / "alpaca" / "watchlist.ini").write_text("[WATCHLIST_ACTIVE_STOCK]\n", encoding="utf-8")
+    (root / "modules").mkdir()
+
+    monkeypatch.setenv("TRADINGBOT_ROOT", str(root))
+    monkeypatch.delenv("TRADINGBOT_PLATFORM", raising=False)
+
+    paths = get_paths()
+
+    assert paths["platform"] == "alpaca"
+    assert paths["keys_ini"].endswith(os.path.join("config", "alpaca", "keys.ini"))
+    assert paths["watchlist_ini"].endswith(os.path.join("config", "alpaca", "watchlist.ini"))
+    assert paths["db_dir"].endswith(os.path.join("db", "alpaca"))
+
+
+def test_load_split_config_uses_legacy_root_watchlist_and_keys_if_platform_files_missing(tmp_path):
+    from modules.config_io import load_split_config
+
+    root = tmp_path / "TradingBot"
+    cfg_dir = root / "config"
+    (cfg_dir / "alpaca").mkdir(parents=True)
+
+    (cfg_dir / "config.ini").write_text("[CONFIGURATION]\n", encoding="utf-8")
+    (cfg_dir / "strategy.ini").write_text("[STRATEGY_THE_GENERAL]\n", encoding="utf-8")
+    (cfg_dir / "watchlist.ini").write_text("[WATCHLIST_ACTIVE_STOCK]\nAMD = Electronic technology\n", encoding="utf-8")
+    (cfg_dir / "keys.ini").write_text("[KEYS]\npaper_alpaca_key = k\n", encoding="utf-8")
+
+    paths = {
+        "config_dir": str(cfg_dir),
+        "configuration_ini": str(cfg_dir / "config.ini"),
+        "strategy_ini": str(cfg_dir / "strategy.ini"),
+        "watchlist_ini": str(cfg_dir / "alpaca" / "watchlist.ini"),
+        "keys_ini": str(cfg_dir / "alpaca" / "keys.ini"),
+    }
+
+    cfg = load_split_config(paths)
+    assert cfg.get("WATCHLIST_ACTIVE_STOCK", "AMD") == "Electronic technology"
+    assert cfg.get("KEYS", "paper_alpaca_key") == "k"

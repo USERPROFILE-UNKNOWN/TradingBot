@@ -4,9 +4,9 @@ Watchlist API (Phase 4 - v5.14.0)
 Single source of truth for accessing the watchlist in its new split format.
 
 New watchlist.ini sections:
-- WATCHLIST_FAVORITES_STOCK / WATCHLIST_FAVORITES_CRYPTO
-- WATCHLIST_ACTIVE_STOCK    / WATCHLIST_ACTIVE_CRYPTO
-- WATCHLIST_ARCHIVE_STOCK   / WATCHLIST_ARCHIVE_CRYPTO
+- WATCHLIST_FAVORITES_STOCK / WATCHLIST_FAVORITES_CRYPTO / WATCHLIST_FAVORITES_ETF
+- WATCHLIST_ACTIVE_STOCK    / WATCHLIST_ACTIVE_CRYPTO    / WATCHLIST_ACTIVE_ETF
+- WATCHLIST_ARCHIVE_STOCK   / WATCHLIST_ARCHIVE_CRYPTO   / WATCHLIST_ARCHIVE_ETF
 
 Notes:
 - Engine/scanners/policy should use ACTIVE by default.
@@ -19,15 +19,18 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 
 GROUPS = ("FAVORITES", "ACTIVE", "ARCHIVE")
-ASSETS = ("STOCK", "CRYPTO", "ALL")
+ASSETS = ("STOCK", "CRYPTO", "ETF", "ALL")
 
 SECTION_MAP: Dict[Tuple[str, str], str] = {
     ("FAVORITES", "STOCK"): "WATCHLIST_FAVORITES_STOCK",
     ("FAVORITES", "CRYPTO"): "WATCHLIST_FAVORITES_CRYPTO",
+    ("FAVORITES", "ETF"): "WATCHLIST_FAVORITES_ETF",
     ("ACTIVE", "STOCK"): "WATCHLIST_ACTIVE_STOCK",
     ("ACTIVE", "CRYPTO"): "WATCHLIST_ACTIVE_CRYPTO",
+    ("ACTIVE", "ETF"): "WATCHLIST_ACTIVE_ETF",
     ("ARCHIVE", "STOCK"): "WATCHLIST_ARCHIVE_STOCK",
     ("ARCHIVE", "CRYPTO"): "WATCHLIST_ARCHIVE_CRYPTO",
+    ("ARCHIVE", "ETF"): "WATCHLIST_ARCHIVE_ETF",
 }
 
 ALL_SECTIONS: Tuple[str, ...] = tuple(SECTION_MAP.values())
@@ -44,6 +47,13 @@ def _is_crypto_symbol(symbol: str) -> bool:
     except Exception:
         return False
     return ("/" in s)
+
+
+def _detect_asset(symbol: str, explicit_asset: str = "") -> str:
+    a = (explicit_asset or "").strip().upper()
+    if a in ("STOCK", "CRYPTO", "ETF"):
+        return a
+    return "CRYPTO" if _is_crypto_symbol(symbol) else "STOCK"
 
 
 def _norm_group(group: str) -> str:
@@ -88,28 +98,29 @@ def _ensure_section(cfg: Any, name: str) -> None:
         pass
 
 
-def _section_keys(cfg: Any, section: str) -> List[str]:
+def _section_items(cfg: Any, section: str) -> List[Tuple[str, str]]:
+    out: List[Tuple[str, str]] = []
     try:
         if cfg is None:
-            return []
+            return out
         if hasattr(cfg, "__contains__") and section in cfg:
             sec = cfg[section]
-            if hasattr(sec, "keys"):
-                return [str(k) for k in sec.keys()]
+            if hasattr(sec, "items"):
+                return [(str(k), str(v or "")) for k, v in sec.items()]
         if isinstance(cfg, dict):
             sec = cfg.get(section) or {}
-            if hasattr(sec, "keys"):
-                return [str(k) for k in sec.keys()]
+            if hasattr(sec, "items"):
+                return [(str(k), str(v or "")) for k, v in sec.items()]
     except Exception:
-        return []
-    return []
+        return out
+    return out
 
 
 def _read_sections(cfg: Any, sections: Iterable[str]) -> List[str]:
     out: List[str] = []
     seen = set()
     for sec in sections:
-        for raw in _section_keys(cfg, sec):
+        for raw, _sector in _section_items(cfg, sec):
             try:
                 sym = str(raw).strip().upper()
             except Exception:
@@ -121,6 +132,45 @@ def _read_sections(cfg: Any, sections: Iterable[str]) -> List[str]:
             seen.add(sym)
             out.append(sym)
     return out
+
+
+def get_watchlist_entries(cfg: Any, *, group: str = "ACTIVE", asset: str = "ALL") -> List[Dict[str, str]]:
+    """Return normalized watchlist rows with optional sector metadata.
+
+    Row shape: {symbol, market, state, sector}
+    """
+    g = _norm_group(group)
+    a = _norm_asset(asset)
+
+    has_new = any(_has_section(cfg, s) for s in ALL_SECTIONS)
+    if not has_new:
+        return []
+
+    groups = GROUPS if g == "ALL" else (g,)
+    assets = ("STOCK", "CRYPTO", "ETF") if a == "ALL" else (a,)
+
+    rows: List[Dict[str, str]] = []
+    seen = set()
+    for gg in groups:
+        for aa in assets:
+            sec = SECTION_MAP[(gg, aa)]
+            for raw, raw_sector in _section_items(cfg, sec):
+                sym = str(raw or "").strip().upper()
+                if not sym:
+                    continue
+                k = (gg, aa, sym)
+                if k in seen:
+                    continue
+                seen.add(k)
+                rows.append(
+                    {
+                        "symbol": sym,
+                        "market": aa,
+                        "state": gg,
+                        "sector": str(raw_sector or "").strip(),
+                    }
+                )
+    return rows
 
 
 def get_watchlist_symbols(cfg: Any, *, group: str = "ACTIVE", asset: str = "STOCK") -> List[str]:
@@ -148,17 +198,25 @@ def get_watchlist_symbols(cfg: Any, *, group: str = "ACTIVE", asset: str = "STOC
 
     sections: List[str] = []
     for gg in groups:
-        if a in ("STOCK", "CRYPTO"):
+        if a in ("STOCK", "CRYPTO", "ETF"):
             sections.append(SECTION_MAP[(gg, a)])
         else:
             sections.append(SECTION_MAP[(gg, "STOCK")])
             sections.append(SECTION_MAP[(gg, "CRYPTO")])
+            sections.append(SECTION_MAP[(gg, "ETF")])
 
     return _read_sections(cfg, sections)
 
 
-def add_watchlist_symbol(cfg: Any, symbol: str, *, group: str = "ACTIVE") -> bool:
-    """Add a single symbol to the appropriate STOCK/CRYPTO watchlist section."""
+def add_watchlist_symbol(
+    cfg: Any,
+    symbol: str,
+    *,
+    group: str = "ACTIVE",
+    asset: str = "",
+    sector: str = "",
+) -> bool:
+    """Add a single symbol to the appropriate STOCK/CRYPTO/ETF watchlist section."""
     try:
         sym = str(symbol or "").strip().upper()
     except Exception:
@@ -170,27 +228,27 @@ def add_watchlist_symbol(cfg: Any, symbol: str, *, group: str = "ACTIVE") -> boo
     if g == "ALL":
         g = "ACTIVE"
 
-    asset = "CRYPTO" if _is_crypto_symbol(sym) else "STOCK"
-    sec = SECTION_MAP[(g, asset)]
+    mkt = _detect_asset(sym, asset)
+    sec = SECTION_MAP[(g, mkt)]
 
     _ensure_section(cfg, sec)
     try:
-        cfg[sec][sym] = ""
+        cfg[sec][sym] = str(sector or "")
         return True
     except Exception:
         # dict-like fallback
         try:
             if isinstance(cfg, dict):
                 d = cfg.setdefault(sec, {})
-                d[sym] = ""
+                d[sym] = str(sector or "")
                 return True
         except Exception:
             return False
     return False
 
 
-def remove_watchlist_symbol(cfg: Any, symbol: str, *, group: str = "ACTIVE") -> bool:
-    """Remove a symbol from the appropriate STOCK/CRYPTO section (if present)."""
+def remove_watchlist_symbol(cfg: Any, symbol: str, *, group: str = "ACTIVE", asset: str = "") -> bool:
+    """Remove a symbol from STOCK/CRYPTO/ETF section(s) (if present)."""
     try:
         sym = str(symbol or "").strip().upper()
     except Exception:
@@ -202,24 +260,30 @@ def remove_watchlist_symbol(cfg: Any, symbol: str, *, group: str = "ACTIVE") -> 
     if g == "ALL":
         g = "ACTIVE"
 
-    asset = "CRYPTO" if _is_crypto_symbol(sym) else "STOCK"
-    sec = SECTION_MAP[(g, asset)]
+    mkt = _detect_asset(sym, asset)
+    candidate_secs = [SECTION_MAP[(g, mkt)]]
+    if not asset:
+        for aa in ("STOCK", "CRYPTO", "ETF"):
+            sname = SECTION_MAP[(g, aa)]
+            if sname not in candidate_secs:
+                candidate_secs.append(sname)
 
-    try:
-        if hasattr(cfg, "__contains__") and sec in cfg and sym in cfg[sec]:
-            del cfg[sec][sym]
-            return True
-    except Exception:
-        pass
-
-    try:
-        if isinstance(cfg, dict) and sec in cfg:
-            d = cfg.get(sec) or {}
-            if sym in d:
-                del d[sym]
+    for sec in candidate_secs:
+        try:
+            if hasattr(cfg, "__contains__") and sec in cfg and sym in cfg[sec]:
+                del cfg[sec][sym]
                 return True
-    except Exception:
-        pass
+        except Exception:
+            pass
+
+        try:
+            if isinstance(cfg, dict) and sec in cfg:
+                d = cfg.get(sec) or {}
+                if sym in d:
+                    del d[sym]
+                    return True
+        except Exception:
+            pass
 
     return False
 

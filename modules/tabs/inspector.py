@@ -596,7 +596,7 @@ class InspectorTab:
             pass
 
     def _ensure_log_subdirs(self):
-        """Best-effort creation of expected log subfolders (summaries/research).
+        """Best-effort creation of expected log subfolders used by Inspector views.
 
         This avoids confusing UI states like "no summaries folder" before the first summary export.
         """
@@ -607,7 +607,7 @@ class InspectorTab:
                 os.makedirs(logs_dir, exist_ok=True)
             except Exception:
                 pass
-            for sub in ("summaries", "research"):
+            for sub in ("summaries", "agent_daily", "backtest", "live_log", "runtime", "strategy_report", "watchlist_policy"):
                 try:
                     os.makedirs(os.path.join(logs_dir, sub), exist_ok=True)
                 except Exception:

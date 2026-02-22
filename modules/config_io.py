@@ -28,10 +28,13 @@ from .config_defaults import default_split_config
 WATCHLIST_SECTIONS_REQUIRED = [
     "WATCHLIST_FAVORITES_STOCK",
     "WATCHLIST_FAVORITES_CRYPTO",
+    "WATCHLIST_FAVORITES_ETF",
     "WATCHLIST_ACTIVE_STOCK",
     "WATCHLIST_ACTIVE_CRYPTO",
+    "WATCHLIST_ACTIVE_ETF",
     "WATCHLIST_ARCHIVE_STOCK",
     "WATCHLIST_ARCHIVE_CRYPTO",
+    "WATCHLIST_ARCHIVE_ETF",
 ]
 
 
@@ -372,13 +375,13 @@ def _parse_keys_ini_loose(keys_ini_path: str) -> dict:
     Supports:
       1) Legacy single-section file with repeated base_url/alpaca_key/alpaca_secret blocks.
       2) Cleaner schema using distinct keys (paper_* / live_*).
-      3) Optional explicit sections like [ALPACA_PAPER], [ALPACA_LIVE], [TELEGRAM], [TRADINGVIEW].
+      3) Optional explicit sections like [ALPACA_PAPER], [ALPACA_LIVE], [TELEGRAM], .
 
     Returns canonical keys in lowercase:
       paper_base_url, paper_alpaca_key, paper_alpaca_secret,
       live_base_url, live_alpaca_key, live_alpaca_secret,
       telegram_token, telegram_chat_id, telegram_enabled,
-      tradingview_secret
+      
     """
     try:
         raw = Path(keys_ini_path).read_text(encoding="utf-8", errors="ignore")
@@ -408,8 +411,6 @@ def _parse_keys_ini_loose(keys_ini_path: str) -> dict:
                 current = "live"
             elif "telegram" in sect:
                 current = "telegram"
-            elif "tradingview" in sect:
-                current = "tradingview"
             elif sect == "keys":
                 current = "keys"
             else:
@@ -425,8 +426,6 @@ def _parse_keys_ini_loose(keys_ini_path: str) -> dict:
                 current = "live"
             elif "telegram" in low:
                 current = "telegram"
-            elif "tradingview" in low:
-                current = "tradingview"
             continue
 
         if "=" not in s:
@@ -444,14 +443,12 @@ def _parse_keys_ini_loose(keys_ini_path: str) -> dict:
             "paper_base_url", "paper_alpaca_key", "paper_alpaca_secret",
             "live_base_url", "live_alpaca_key", "live_alpaca_secret",
             "telegram_token", "telegram_chat_id", "telegram_enabled",
-            "tradingview_secret",
+            "",
         ):
             _set(k, v)
             continue
 
-        # Legacy TradingView secret name
-        if k == "secret" and current == "tradingview":
-            _set("tradingview_secret", v)
+            _set("", v)
             continue
 
         # Legacy Alpaca keys (duplicated)
@@ -494,7 +491,7 @@ def _apply_keys_to_cfg(cfg: configparser.ConfigParser, keys_map: dict, paper_tra
         "paper_base_url", "paper_alpaca_key", "paper_alpaca_secret",
         "live_base_url", "live_alpaca_key", "live_alpaca_secret",
         "telegram_token", "telegram_chat_id", "telegram_enabled",
-        "tradingview_secret",
+        "",
     ]
     for k in canonical:
         v = keys_map.get(k)
@@ -526,14 +523,6 @@ def _apply_keys_to_cfg(cfg: configparser.ConfigParser, keys_map: dict, paper_tra
     cfg.set("KEYS", "alpaca_key", str(alpaca_key or "").strip())
     cfg.set("KEYS", "alpaca_secret", str(alpaca_secret or "").strip())
 
-    # Bridge TradingView secret for callers still reading [TRADINGVIEW].secret
-    tv = keys_map.get("tradingview_secret") or cfg.get("KEYS", "tradingview_secret", fallback="").strip()
-    if tv:
-        if not cfg.has_section("TRADINGVIEW"):
-            cfg.add_section("TRADINGVIEW")
-        if not cfg.get("TRADINGVIEW", "secret", fallback="").strip():
-            cfg.set("TRADINGVIEW", "secret", tv)
-
 
 def load_split_config(paths: Dict[str, str]) -> configparser.ConfigParser:
     """Load split .ini configs with robust keys.ini parsing.
@@ -552,6 +541,7 @@ def load_split_config(paths: Dict[str, str]) -> configparser.ConfigParser:
     configuration_ini = paths.get("configuration_ini", "")
     watchlist_ini = paths.get("watchlist_ini", "")
     strategy_ini = paths.get("strategy_ini", "")
+    sectors_ini = paths.get("sectors_ini", "")
     keys_ini = paths.get("keys_ini", "")
 
     # Guardrail: repair merged/corrupted CONFIGURATION lines before parsing.
@@ -561,37 +551,23 @@ def load_split_config(paths: Dict[str, str]) -> configparser.ConfigParser:
     except Exception:
         pass
 
+    # Platform-layout compatibility fallback (read-only): if platform files are missing,
+    # continue to read legacy root-level files so upgrades can boot before migration.
+    if watchlist_ini and (not os.path.exists(watchlist_ini)):
+        legacy_watch = os.path.join(paths.get("config_dir", ""), "watchlist.ini")
+        if legacy_watch and os.path.exists(legacy_watch):
+            watchlist_ini = legacy_watch
+    if keys_ini and (not os.path.exists(keys_ini)):
+        legacy_keys = os.path.join(paths.get("config_dir", ""), "keys.ini")
+        if legacy_keys and os.path.exists(legacy_keys):
+            keys_ini = legacy_keys
+
     # Read config.ini first so we can select paper/live keys.
     _read_ini_with_fallback(cfg, configuration_ini)
 
-    # Keep config.ini human-friendly: TradingView keys are stored in [CONFIGURATION]
-    # with comment headers. Hydrate a runtime [TRADINGVIEW] view when absent.
-    if not cfg.has_section("TRADINGVIEW"):
-        cfg.add_section("TRADINGVIEW")
-    for k in (
-        "enabled",
-        "listen_host",
-        "listen_port",
-        "secret",
-        "allowed_signals",
-        "mode",
-        "candidate_cooldown_minutes",
-        "autovalidation_enabled",
-        "autovalidation_cooldown_minutes",
-        "autovalidation_freshness_minutes",
-        "autovalidation_backfill_days",
-        "autovalidation_backtest_days",
-        "autovalidation_max_strategies",
-        "autovalidation_min_trades",
-        "autovalidation_max_concurrency",
-    ):
-        if not cfg.get("TRADINGVIEW", k, fallback="").strip():
-            v = cfg.get("CONFIGURATION", k, fallback="").strip()
-            if v != "":
-                cfg.set("TRADINGVIEW", k, v)
-
     _read_ini_with_fallback(cfg, watchlist_ini)
     _read_ini_with_fallback(cfg, strategy_ini)
+    _read_ini_with_fallback(cfg, sectors_ini)
 
     # Determine paper/live selection (support older key name 'paper' as fallback)
     try:
@@ -973,30 +949,39 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             paths["configuration_ini"],
             paths["watchlist_ini"],
             paths["strategy_ini"],
+            paths.get("sectors_ini", ""),
         )
     )
 
     if split_exists:
         # Create missing split files (do not overwrite existing ones)
         if not os.path.exists(paths["keys_ini"]):
-            keys_cfg = _clone_sections(defaults, ["KEYS"])
-            if not keys_cfg.has_section("KEYS"):
-                keys_cfg.add_section("KEYS")
-            _write_ini(keys_cfg, paths["keys_ini"])
+            legacy_keys = os.path.join(paths.get("config_dir", ""), "keys.ini")
+            if legacy_keys and os.path.abspath(legacy_keys) != os.path.abspath(paths["keys_ini"]) and os.path.exists(legacy_keys):
+                shutil.copy2(legacy_keys, paths["keys_ini"])
+            else:
+                keys_cfg = _clone_sections(defaults, ["KEYS"])
+                if not keys_cfg.has_section("KEYS"):
+                    keys_cfg.add_section("KEYS")
+                _write_ini(keys_cfg, paths["keys_ini"])
 
         if not os.path.exists(paths["configuration_ini"]):
-            cfg_cfg = _clone_sections(defaults, ["CONFIGURATION", "TRADINGVIEW"])
+            cfg_cfg = _clone_sections(defaults, ["CONFIGURATION"])
             if not cfg_cfg.has_section("CONFIGURATION"):
                 cfg_cfg.add_section("CONFIGURATION")
             _write_ini(cfg_cfg, paths["configuration_ini"])
 
         if not os.path.exists(paths["watchlist_ini"]):
-            watch_secs = [s for s in defaults.sections() if s.upper().startswith("WATCHLIST_")]
-            watch_cfg = _clone_sections(defaults, watch_secs)
-            for s in WATCHLIST_SECTIONS_REQUIRED:
-                if not watch_cfg.has_section(s):
-                    watch_cfg.add_section(s)
-            _write_ini(watch_cfg, paths["watchlist_ini"])
+            legacy_watch = os.path.join(paths.get("config_dir", ""), "watchlist.ini")
+            if legacy_watch and os.path.abspath(legacy_watch) != os.path.abspath(paths["watchlist_ini"]) and os.path.exists(legacy_watch):
+                shutil.copy2(legacy_watch, paths["watchlist_ini"])
+            else:
+                watch_secs = [s for s in defaults.sections() if s.upper().startswith("WATCHLIST_")]
+                watch_cfg = _clone_sections(defaults, watch_secs)
+                for s in WATCHLIST_SECTIONS_REQUIRED:
+                    if not watch_cfg.has_section(s):
+                        watch_cfg.add_section(s)
+                _write_ini(watch_cfg, paths["watchlist_ini"])
         else:
             # Ensure the required sections exist (keeps runtime stable if a user edited/deleted sections)
             try:
@@ -1016,6 +1001,14 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             strat_secs = [s for s in defaults.sections() if s.upper().startswith("STRATEGY_")]
             strat_cfg = _clone_sections(defaults, strat_secs)
             _write_ini(strat_cfg, paths["strategy_ini"])
+
+
+        if paths.get("sectors_ini") and not os.path.exists(paths["sectors_ini"]):
+            sec_cfg = _clone_sections(defaults, ["STOCK_SECTORS", "CRYPTO_SECTORS", "ETF_SECTORS"])
+            for sec in ("STOCK_SECTORS", "CRYPTO_SECTORS", "ETF_SECTORS"):
+                if not sec_cfg.has_section(sec):
+                    sec_cfg.add_section(sec)
+            _write_ini(sec_cfg, paths["sectors_ini"])
 
         # Keep file stable: do not auto-append defaults into existing user INI files.
         cfg_desc = {
@@ -1072,15 +1065,6 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             "miniplayer_ui_refresh_ms": "Miniplayer UI refresh cadence (milliseconds). Slower = lower CPU.",
         }
 
-        tv_desc = {
-            "enabled": "Enable TradingView webhook receiver (stdlib HTTP server).",
-            "listen_host": "Bind address for the webhook server (recommend 127.0.0.1).",
-            "listen_port": "Bind port for the webhook server (1-65535).",
-            "secret": "Shared secret required for auth (strict mode requires when enabled).",
-            "allowed_signals": "Optional CSV allow-list (e.g. BUY,SELL). Empty = allow all.",
-            "mode": "OFF|ADVISORY|PAPER|LIVE (pipeline stage; v5.14.5 persists alerts only).",
-        }
-
         keys_desc = {
             "paper_base_url": "Paper trading Alpaca base URL.",
             "paper_alpaca_key": "Paper trading Alpaca API key.",
@@ -1091,7 +1075,6 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
             "telegram_token": "Telegram bot token (optional).",
             "telegram_chat_id": "Telegram chat id (optional).",
             "telegram_enabled": "Enable Telegram notifications.",
-            "tradingview_secret": "TradingView webhook shared secret (kept in keys.ini).",
         }
 
 
@@ -1103,57 +1086,6 @@ def ensure_split_config_layout(paths: Dict[str, str], *, force_defaults: bool = 
 
         # Do not mutate existing config.ini/keys.ini by appending missing defaults.
         # This preserves user formatting and line count stability across app runs.
-
-        # ---- Hotfix v5.16.2: repair misfiled keys from prior patch runs ----
-        # 1) Remove non-secret config keys that were incorrectly injected into keys.ini
-        try:
-            _remove_keys_from_ini_section_preserve_comments(paths["keys_ini"], "KEYS", ["data_feed"])
-        except Exception:
-            pass
-
-        # 2) Remove obsolete/legacy keys that were incorrectly appended into the TRADINGVIEW section
-        try:
-            _remove_keys_from_ini_section_preserve_comments(
-                paths["configuration_ini"],
-                "TRADINGVIEW",
-                ["paper", "allow_live", "webhook_secret"],
-            )
-        except Exception:
-            pass
-
-        # 3) One-way migration: move TRADINGVIEW.secret -> KEYS.tradingview_secret (copy then blank)
-        try:
-            cfg_now = _new_config_parser()
-            _read_ini_with_fallback(cfg_now, paths["configuration_ini"])
-            secret = (
-                cfg_now.get("TRADINGVIEW", "secret", fallback="")
-                or cfg_now.get("CONFIGURATION", "secret", fallback="")
-                or ""
-            ).strip()
-
-            keys_now = _new_config_parser()
-            _read_ini_with_fallback(keys_now, paths["keys_ini"])
-            keys_secret = (keys_now.get("KEYS", "tradingview_secret", fallback="") or "").strip()
-
-            if secret and not keys_secret:
-                _update_ini_section_values_preserve_comments(
-                    paths["keys_ini"],
-                    section_name="KEYS",
-                    items=[("tradingview_secret", secret)],
-                    descriptions={"tradingview_secret": "TradingView webhook shared secret (kept in keys.ini)."},
-                    header_title="TRADINGVIEW (secret)",
-                )
-
-                _update_ini_section_values_preserve_comments(
-                    paths["configuration_ini"],
-                    section_name="TRADINGVIEW",
-                    items=[("secret", "")],
-                    descriptions={"secret": "TradingView webhook secret moved to keys.ini (tradingview_secret)."},
-                    header_title="TRADINGVIEW (Webhook Integration)",
-                )
-        except Exception:
-            pass
-
 
         return
 

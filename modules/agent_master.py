@@ -17,7 +17,6 @@ from .governance import Governance
 from .metrics import MetricsStore
 from .experiments import ExperimentsStore
 from .logging_utils import get_component_logger
-from .research.tv_autovalidation import TradingViewAutoValidator
 from .research.watchlist_policy import apply_watchlist_policy
 from .research.full_backtest_service import run_full_backtest_service
 from .watchlist_api import add_watchlist_symbol, get_watchlist_symbols, remove_watchlist_symbol
@@ -32,7 +31,6 @@ class AgentMaster:
         self.log = log_callback or (lambda *_args, **_kwargs: None)
 
         self._logger = get_component_logger(__name__, "agent_master")
-        self._tv_logger = get_component_logger(__name__, "tv_webhook")
 
         self.mode = self._read_mode()
         self.bus = EventBus()
@@ -42,35 +40,6 @@ class AgentMaster:
         self.experiments = ExperimentsStore(db_dir)
         self.scheduler = JobScheduler(log_callback=self.log, metrics_store=self.metrics)
 
-        # TradingView alert autovalidation (PAPER-only; gated internally)
-        def _tv_autoval_log(msg: str) -> None:
-            try:
-                self._tv_logger.info(
-                    msg,
-                    extra={
-                        "component": "tv_autovalidation",
-                        "incident": "TV_AUTOVAL_MSG",
-                    },
-                )
-            except Exception:
-                pass
-            try:
-                self.log(str(msg))
-            except Exception:
-                pass
-
-        self._tv_autovalidation = TradingViewAutoValidator(
-            self.config,
-            self.db,
-            self.metrics,
-            _tv_autoval_log,
-            lambda: self.mode,
-        )
-
-        self._tv_server = None
-
-        # TradingView candidate de-dup (per symbol/timeframe/signal)
-        self._tv_candidate_last = {}
         self._agent_started_at = time.time()
         self._last_backfill_started_at = 0.0
         self._last_daily_report_date = ""
@@ -86,16 +55,8 @@ class AgentMaster:
         self._register_jobs()
         self.scheduler.start()
 
-        # Phase 1.5: TradingView webhook ingestion (optional)
-        self._start_tradingview_webhook_if_enabled()
 
     def shutdown(self):
-        try:
-            if self._tv_server is not None:
-                self._tv_server.stop()
-        except Exception:
-            pass
-
         try:
             self.scheduler.stop()
         except Exception:
@@ -254,8 +215,6 @@ class AgentMaster:
             self.scheduler.add_job("agent_research_sweep", 900, self._run_research_sweep)
         if self._cfg_bool("CONFIGURATION", "agent_canary_enabled", True):
             self.scheduler.add_job("agent_live_canary_guardrails", 60, self._run_live_canary_guardrails)
-        if getattr(self, "_tv_autovalidation", None) is not None:
-            self.scheduler.add_job("tv_autovalidation_pump", 2, self._tv_autovalidation.pump)
 
     def _run_db_integrity_check(self) -> None:
         db_paths = []
@@ -1032,7 +991,7 @@ class AgentMaster:
         }
 
         logs_dir = self._paths_get("logs", os.path.join(os.getcwd(), "logs"))
-        out_dir = os.path.join(logs_dir, "summaries")
+        out_dir = os.path.join(logs_dir, "agent_daily")
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"agent_daily_{day}.json")
         with open(out_path, "w", encoding="utf-8") as f:
@@ -1164,7 +1123,7 @@ class AgentMaster:
                 ok_count += 1
 
         logs_dir = self._paths_get("logs", os.path.join(os.getcwd(), "logs"))
-        out_dir = os.path.join(logs_dir, "research")
+        out_dir = os.path.join(logs_dir, "summaries")
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"agent_research_sweep_{day}.json")
         with open(out_path, "w", encoding="utf-8") as f:
@@ -1373,265 +1332,6 @@ class AgentMaster:
         return m if m in self.MODES else "OFF"
 
     # ------------------------------
-    # TradingView webhook ingestion
-    # ------------------------------
-
-    def _cfg_bool(self, section: str, key: str, default: bool = False) -> bool:
-        try:
-            v = str(self.config.get(section, key, fallback=str(default))).strip().lower()
-            return v in ("1", "true", "yes", "y", "on")
-        except Exception:
-            return bool(default)
-
-    def _cfg_int(self, section: str, key: str, default: int) -> int:
-        try:
-            return int(str(self.config.get(section, key, fallback=str(default))).strip())
-        except Exception:
-            return int(default)
-
-    def _cfg_float(self, section: str, key: str, default: float = 0.0) -> float:
-        try:
-            return float(str(self.config.get(section, key, fallback=str(default))).strip())
-        except Exception:
-            return float(default)
-
-    def _cfg_str(self, section: str, key: str, default: str = "") -> str:
-        try:
-            return str(self.config.get(section, key, fallback=default)).strip()
-        except Exception:
-            return str(default)
-
-    def _start_tradingview_webhook_if_enabled(self) -> None:
-        try:
-            enabled = self._cfg_bool("TRADINGVIEW", "enabled", False)
-            mode = self._cfg_str("TRADINGVIEW", "mode", "ADVISORY").upper()
-            if not enabled or mode == "OFF":
-                return
-
-            host = self._cfg_str("TRADINGVIEW", "listen_host", "127.0.0.1")
-            port = self._cfg_int("TRADINGVIEW", "listen_port", 5001)
-            # Secrets live in keys.ini (KEYS.tradingview_secret).
-            # Fallback to config.ini [TRADINGVIEW].secret for one-way migration safety.
-            secret = self._cfg_str("KEYS", "tradingview_secret", "")
-            if not secret:
-                secret = self._cfg_str("TRADINGVIEW", "secret", "")
-            allow_raw = self._cfg_str("TRADINGVIEW", "allowed_signals", "")
-            allowed_signals = [s.strip().upper() for s in allow_raw.split(",") if s.strip()]
-
-            from .integrations.tradingview_webhook import TradingViewWebhookServer
-
-            self._tv_server = TradingViewWebhookServer(
-                host,
-                port,
-                secret=secret,
-                allowed_signals=allowed_signals,
-                on_alert=self._on_tradingview_alert,
-                logger=self._tv_logger,
-            )
-            self._tv_server.start()
-            self.log(f"📡 [TV] Webhook listener ON ({host}:{port})")
-        except Exception:
-            self._logger.exception("[E_TV_START_FAIL] Failed starting TradingView webhook listener")
-
-    def _on_tradingview_alert(
-        self,
-        payload: Dict[str, Any],
-        raw_json: str,
-        idempotency_key: str,
-        headers: Dict[str, str],
-        client_ip: str,
-    ) -> None:
-        # Extract common fields (best-effort)
-        ts = None
-        for k in ("ts", "timestamp", "time", "t"):
-            if k in payload:
-                ts = payload.get(k)
-                break
-        try:
-            ts_i = int(ts) if ts is not None else int(time.time())
-        except Exception:
-            ts_i = int(time.time())
-
-        symbol = payload.get("symbol") or payload.get("ticker") or payload.get("sym")
-        exchange = payload.get("exchange") or payload.get("ex")
-        timeframe = payload.get("timeframe") or payload.get("tf") or payload.get("interval")
-        signal = payload.get("signal") or payload.get("action") or payload.get("side")
-
-        price = payload.get("price")
-        if price is None:
-            price = payload.get("close")
-        try:
-            price_f: Optional[float] = float(price) if price is not None else None
-        except Exception:
-            price_f = None
-
-        processed = 1 if bool(payload.get("_ignored")) else 0
-
-        try:
-            rid = self.metrics.log_tradingview_alert(
-                ts=ts_i,
-                symbol=str(symbol).strip() if symbol is not None else None,
-                exchange=str(exchange).strip() if exchange is not None else None,
-                timeframe=str(timeframe).strip() if timeframe is not None else None,
-                signal=str(signal).strip() if signal is not None else None,
-                price=price_f,
-                raw_json=raw_json,
-                idempotency_key=idempotency_key,
-                processed=processed,
-                extra={"client_ip": client_ip, "headers": headers},
-            )
-        except Exception:
-            self._logger.exception(
-                "[E_TV_DB_WRITE_FAIL] Failed persisting TradingView alert",
-                extra={
-                    "component": "tv_webhook",
-                    "symbol": (str(symbol).strip().upper() if symbol else "-"),
-                    "mode": self.mode,
-                },
-            )
-            return
-
-        try:
-            # Forward-compatible: publish to the bus for downstream candidate pipeline (v5.14.6+)
-            self.bus.publish(
-                "TRADINGVIEW_ALERT",
-                {
-                    "metrics_rowid": rid,
-                    "ts": ts_i,
-                    "symbol": symbol,
-                    "exchange": exchange,
-                    "timeframe": timeframe,
-                    "signal": signal,
-                    "price": price_f,
-                    "idempotency_key": idempotency_key,
-                    "client_ip": client_ip,
-                },
-            )
-        except Exception:
-            pass
-
-        try:
-            s_sym = str(symbol or "").strip().upper()
-            s_sig = str(signal or "").strip().upper()
-            self._tv_logger.info(
-                f"[TV] Alert received signal={s_sig} symbol={s_sym}",
-                extra={"symbol": s_sym or "-", "mode": self.mode, "component": "tv_webhook"},
-            )
-        except Exception:
-            pass
-
-        # Optional UI log line (keep concise)
-        try:
-            if symbol and signal:
-                self.log(f"📡 [TV] {str(signal).strip().upper()} {str(symbol).strip().upper()}")
-        except Exception:
-            pass
-
-    def _on_tradingview_candidate(self, payload: Dict[str, Any]) -> None:
-        """Convert a TradingView alert into a DB candidate (ADVISORY-safe).
-
-        - Stores+scores candidates only (no trading actions).
-        - Dedups identical alerts within a cooldown window (symbol/timeframe/signal).
-        """
-        try:
-            if not isinstance(payload, dict):
-                return
-
-            if payload.get("_ignored"):
-                return
-
-            mode = (self._cfg_str("TRADINGVIEW", "mode", "ADVISORY") or "ADVISORY").upper()
-            if mode == "OFF":
-                return
-
-            symbol = str(payload.get("symbol") or "").strip().upper()
-            if not symbol:
-                return
-
-            timeframe = str(payload.get("timeframe") or "").strip()
-            signal = str(payload.get("signal") or "").strip().upper()
-            exchange = str(payload.get("exchange") or "").strip().upper()
-            price = payload.get("price")
-            idem = str(payload.get("idempotency_key") or "").strip()
-
-            cooldown_min = max(0, int(self._cfg_int("TRADINGVIEW", "candidate_cooldown_minutes", 5)))
-            now_ts = int(payload.get("ts") or time.time())
-            key = (symbol, timeframe, signal)
-            last = self._tv_candidate_last.get(key)
-            if cooldown_min > 0 and last and (now_ts - int(last)) < (cooldown_min * 60):
-                self._tv_logger.info(
-                    "TV candidate dedup hit",
-                    extra={
-                        "component": "tv_candidate",
-                        "incident": "TV_CAND_DEDUP",
-                        "symbol": symbol,
-                        "mode": mode,
-                    },
-                )
-                return
-            self._tv_candidate_last[key] = now_ts
-
-            from .research.candidate_scanner import CandidateScanner
-
-            scanner = CandidateScanner(self.db, self.config, log=self._logger)
-            extra_details = {
-                "source": "TRADINGVIEW",
-                "tv_timeframe": timeframe,
-                "tv_signal": signal,
-                "tv_exchange": exchange,
-                "tv_price": price,
-                "tv_idempotency_key": idem,
-                "tv_alert_ts": now_ts,
-            }
-
-            row = scanner.score_single_symbol(
-                symbol,
-                universe="TRADINGVIEW",
-                extra_details=extra_details,
-                force_accept=True,
-            )
-            if not row:
-                return
-
-            scan_date = row.get("scan_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            sid = f"TV_{scan_date}"
-            if timeframe:
-                sid += f"_{timeframe}"
-            if signal:
-                sid += f"_{signal}"
-            sid = re.sub(r"[^A-Za-z0-9_\-]", "_", sid)
-
-            self.db.save_candidates(sid, [row])
-
-            # PAPER-only: enqueue autovalidation (backfill + quick sanity backtest) if enabled
-            try:
-                if getattr(self, "_tv_autovalidation", None) is not None:
-                    self._tv_autovalidation.maybe_enqueue(payload)
-            except Exception:
-                self._tv_logger.exception(
-                    "TV autovalidation enqueue failed",
-                    extra={"component": "tv_autovalidation", "incident": "TV_AUTOVAL_ENQ_FAIL"},
-                )
-
-            self._tv_logger.info(
-                "TV candidate saved",
-                extra={
-                    "component": "tv_candidate",
-                    "incident": "TV_CAND_SAVED",
-                    "symbol": symbol,
-                    "mode": mode,
-                },
-            )
-        except Exception:
-            self._tv_logger.exception(
-                "TV candidate conversion failed",
-                extra={
-                    "component": "tv_candidate",
-                    "incident": "TV_CAND_FAIL",
-                },
-            )
-
-    # ------------------------------
     # Event bus
     # ------------------------------
 
@@ -1646,10 +1346,6 @@ class AgentMaster:
                 self._hard_halt_active = True
             if self.mode in {"PAPER", "LIVE"}:
                 self.log(f"🧠 [AGENT] Detected {ev_type}; tightening guardrails.")
-
-        if ev_type == "TRADINGVIEW_ALERT":
-            self._on_tradingview_candidate(payload)
-            return
 
         if ev_type == "candidate_scan_completed":
             if self._cfg_bool("CONFIGURATION", "agent_candidate_simulation_run_after_scan", True):

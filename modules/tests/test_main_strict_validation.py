@@ -41,7 +41,7 @@ def _bootstrap_main_with_dummies(monkeypatch, tmp_path):
     fake_ui.TradingApp = DummyTradingApp
     monkeypatch.setitem(sys.modules, "modules.ui", fake_ui)
 
-    main = importlib.import_module("main")
+    main = importlib.import_module("modules.main")
     monkeypatch.setattr(main, "TradingApp", DummyTradingApp)
 
     logs = tmp_path / "logs"
